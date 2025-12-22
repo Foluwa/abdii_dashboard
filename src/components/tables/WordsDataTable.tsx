@@ -1,0 +1,332 @@
+import React, { useState } from "react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableRow,
+} from "../ui/table";
+import Badge from "../ui/badge/Badge";
+import { FiTrash2, FiEdit, FiVolume2, FiSearch, FiFilter } from "react-icons/fi";
+import { ConfirmationModal } from "../ui/modal/ConfirmationModal";
+
+interface Word {
+  id: string;
+  word: string;
+  lemma_normalized: string;
+  pos: string;
+  language_id: string;
+  audio_key: string | null;
+  audio_duration_sec: number | null;
+  category: string | null;
+  difficulty_level: number | null;
+  usage_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface WordsDataTableProps {
+  words: Word[];
+  isLoading: boolean;
+  onEdit: (word: Word) => void;
+  onDelete: (wordId: string) => void;
+  onSearch: (query: string) => void;
+  searchQuery: string;
+  selectedWords?: string[];
+  onSelectWord?: (wordId: string) => void;
+  onSelectAll?: () => void;
+}
+
+export default function WordsDataTable({
+  words,
+  isLoading,
+  onEdit,
+  onDelete,
+  onSearch,
+  searchQuery,
+  selectedWords = [],
+  onSelectWord,
+  onSelectAll,
+}: WordsDataTableProps) {
+  const [playingAudio, setPlayingAudio] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; word: string } | null>(null);
+
+  const handlePlayAudio = (audioKey: string) => {
+    // Play audio logic here
+    setPlayingAudio(audioKey);
+    // Reset after playing
+    setTimeout(() => setPlayingAudio(null), 1000);
+  };
+
+  const getDifficultyBadge = (level: number | null) => {
+    if (!level) return null;
+    const colors: Record<number, "success" | "info" | "warning" | "error"> = {
+      1: "success",
+      2: "success",
+      3: "info",
+      4: "warning",
+      5: "error",
+    };
+    return (
+      <Badge size="sm" color={colors[level] || "info"}>
+        Level {level}
+      </Badge>
+    );
+  };
+
+  const getPOSBadge = (pos: string) => {
+    const posColors: Record<string, string> = {
+      noun: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+      verb: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      adj: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
+      adv: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
+      pron: "bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-400",
+    };
+
+    const colorClass = posColors[pos] || "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400";
+
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${colorClass}`}>
+        {pos.toUpperCase()}
+      </span>
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+        <div className="flex items-center justify-center p-12">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-brand-600 dark:border-gray-700 dark:border-t-brand-500"></div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Loading words...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+      {/* Search Bar */}
+      <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-4 dark:border-white/[0.05] dark:bg-white/[0.02]">
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+              <FiSearch className="h-4 w-4 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => onSearch(e.target.value)}
+              placeholder="Search words or translations..."
+              className="block w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"
+            />
+          </div>
+          <button className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800">
+            <FiFilter className="h-4 w-4" />
+            Filter
+          </button>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="max-w-full overflow-x-auto">
+        <div className="min-w-[1000px]">
+          <Table>
+            {/* Table Header */}
+            <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+              <TableRow>
+                {onSelectAll && (
+                  <TableCell
+                    isHeader
+                    className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400 w-12"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedWords.length === words.length && words.length > 0}
+                      onChange={onSelectAll}
+                      className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800"
+                    />
+                  </TableCell>
+                )}
+                <TableCell
+                  isHeader
+                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                >
+                  Word
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                >
+                  Part of Speech
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                >
+                  Category
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                >
+                  Difficulty
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                >
+                  Audio
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-5 py-3 font-medium text-gray-500 text-end text-theme-xs dark:text-gray-400"
+                >
+                  Actions
+                </TableCell>
+              </TableRow>
+            </TableHeader>
+
+            {/* Table Body */}
+            <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
+              {words && words.length > 0 ? (
+                words.map((word) => (
+                  <TableRow
+                    key={word.id}
+                    className="transition-colors hover:bg-gray-50/50 dark:hover:bg-white/[0.02]"
+                  >
+                    {/* Checkbox Column */}
+                    {onSelectWord && (
+                      <TableCell className="px-5 py-4 text-start w-12">
+                        <input
+                          type="checkbox"
+                          checked={selectedWords.includes(word.id)}
+                          onChange={() => onSelectWord(word.id)}
+                          className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800"
+                        />
+                      </TableCell>
+                    )}
+                    {/* Word Column */}
+                    <TableCell className="px-5 py-4 text-start">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-lg font-semibold text-gray-900 dark:text-white">
+                          {word.word}
+                        </span>
+                        {word.lemma_normalized !== word.word.toLowerCase() && (
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            Normalized: {word.lemma_normalized}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+
+                    {/* Part of Speech */}
+                    <TableCell className="px-4 py-3 text-start">
+                      {getPOSBadge(word.pos)}
+                    </TableCell>
+
+                    {/* Category */}
+                    <TableCell className="px-4 py-3 text-start">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                        {word.category || (
+                          <span className="italic text-gray-400 dark:text-gray-500">
+                            No category
+                          </span>
+                        )}
+                      </span>
+                    </TableCell>
+
+                    {/* Difficulty */}
+                    <TableCell className="px-4 py-3 text-start">
+                      {word.difficulty_level ? (
+                        getDifficultyBadge(word.difficulty_level)
+                      ) : (
+                        <span className="text-xs italic text-gray-400 dark:text-gray-500">
+                          Not set
+                        </span>
+                      )}
+                    </TableCell>
+
+                    {/* Audio */}
+                    <TableCell className="px-4 py-3 text-start">
+                      {word.audio_key ? (
+                        <button
+                          onClick={() => handlePlayAudio(word.audio_key!)}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-2.5 py-1.5 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-100 dark:bg-brand-900/20 dark:text-brand-400 dark:hover:bg-brand-900/30"
+                        >
+                          <FiVolume2
+                            className={`h-3.5 w-3.5 ${playingAudio === word.audio_key ? "animate-pulse" : ""}`}
+                          />
+                          {word.audio_duration_sec
+                            ? `${word.audio_duration_sec.toFixed(1)}s`
+                            : "Play"}
+                        </button>
+                      ) : (
+                        <span className="text-xs italic text-gray-400 dark:text-gray-500">
+                          No audio
+                        </span>
+                      )}
+                    </TableCell>
+
+                    {/* Actions */}
+                    <TableCell className="px-4 py-3 text-end">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => onEdit(word)}
+                          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-brand-600 transition-colors hover:bg-brand-50 hover:text-brand-700 dark:text-brand-400 dark:hover:bg-brand-900/20"
+                        >
+                          <FiEdit className="h-3.5 w-3.5" />
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirm({ id: word.id, word: word.word })}
+                          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+                        >
+                          <FiTrash2 className="h-3.5 w-3.5" />
+                          Delete
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <td
+                    colSpan={6}
+                    className="px-5 py-12 text-center text-gray-500 dark:text-gray-400"
+                  >
+                    <div className="flex flex-col items-center gap-2">
+                      <FiSearch className="h-12 w-12 text-gray-300 dark:text-gray-700" />
+                      <p className="text-sm font-medium">No words found</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                        Try adjusting your search or filters
+                      </p>
+                    </div>
+                  </td>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={() => {
+          if (deleteConfirm) {
+            onDelete(deleteConfirm.id);
+            setDeleteConfirm(null);
+          }
+        }}
+        title="Delete Word"
+        message={`Are you sure you want to delete "${deleteConfirm?.word}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+      />
+    </div>
+  );
+}
