@@ -9,6 +9,7 @@ import Toast from "@/components/ui/toast/Toast";
 import { StyledSelect } from "@/components/ui/form/StyledSelect";
 import StatusBadge from "@/components/admin/StatusBadge";
 import { ConfirmationModal } from "@/components/ui/modal/ConfirmationModal";
+import Alert from "@/components/ui/alert/SimpleAlert";
 import { FiGlobe, FiCheckCircle } from "react-icons/fi";
 
 export default function LessonsPage() {
@@ -169,7 +170,6 @@ export default function LessonsPage() {
                 { value: "", label: "All Languages" },
                 ...(languages?.map((lang: any) => ({ value: lang.id.toString(), label: lang.name })) || []),
               ]}
-              icon={FiGlobe}
               fullWidth
             />
           </div>
@@ -188,7 +188,6 @@ export default function LessonsPage() {
                 { value: "published", label: "Published" },
                 { value: "archived", label: "Archived" },
               ]}
-              icon={FiCheckCircle}
               fullWidth
             />
           </div>

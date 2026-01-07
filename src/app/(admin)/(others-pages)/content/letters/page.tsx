@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useLanguages } from "@/hooks/useApi";
 import { apiClient } from "@/lib/api";
+import type { Language } from "@/types/api";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Toast from "@/components/ui/toast/Toast";
 import Alert from "@/components/ui/alert/Alert";
@@ -210,7 +211,7 @@ export default function LettersPage() {
 
   return (
     <div className="p-6">
-      <PageBreadCrumb pageTitle="Letters" />
+      {/* <PageBreadCrumb pageTitle="Letters" /> */}
 
       {successMessage && <Toast type="success" message={successMessage} onClose={() => setSuccessMessage("")} />}
       {error && <Toast type="error" message={error} onClose={() => setError("")} />}

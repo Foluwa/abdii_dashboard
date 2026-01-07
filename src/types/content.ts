@@ -113,6 +113,61 @@ export interface ContentVersion {
 }
 
 /**
+ * Learning Items (Games & Lessons)
+ */
+export interface LearningItem {
+  id: string;
+  language_id: string;
+  item_key: string;
+  title: string;
+  about: string;
+  icon_name: string;
+  level: string;
+  difficulty: string;
+  duration_minutes: number;
+  xp_reward: number;
+  item_type: 'game' | 'lesson';
+  launch_route: string;
+  is_active: boolean;
+  is_premium: boolean;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LearningItemCreate {
+  language_id: string;
+  item_key: string;
+  title: string;
+  about?: string;
+  icon_name?: string;
+  level?: string;
+  difficulty?: string;
+  duration_minutes?: number;
+  xp_reward?: number;
+  item_type?: 'game' | 'lesson';
+  launch_route?: string;
+  is_active?: boolean;
+  is_premium?: boolean;
+  display_order?: number;
+}
+
+export interface LearningItemUpdate {
+  title?: string;
+  about?: string;
+  icon_name?: string;
+  level?: string;
+  difficulty?: string;
+  duration_minutes?: number;
+  xp_reward?: number;
+  item_type?: 'game' | 'lesson';
+  launch_route?: string;
+  is_active?: boolean;
+  is_premium?: boolean;
+  display_order?: number;
+}
+
+/**
  * Pagination
  */
 export interface PaginatedResponse<T> {

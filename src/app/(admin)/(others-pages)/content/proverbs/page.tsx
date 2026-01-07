@@ -32,6 +32,19 @@ export default function ProverbsPage() {
   });
   const { languages } = useLanguages();
 
+  // Deduplicate proverbs to prevent duplicate key errors
+  const uniqueProverbs = React.useMemo(() => {
+    if (!proverbs) return [];
+    const seen = new Set<number>();
+    return proverbs.filter((proverb) => {
+      if (seen.has(proverb.id)) {
+        return false;
+      }
+      seen.add(proverb.id);
+      return true;
+    });
+  }, [proverbs]);
+
   const [formData, setFormData] = useState({
     language_id: 0,
     proverb: "",
@@ -243,11 +256,11 @@ export default function ProverbsPage() {
 
       {/* Proverbs DataTable */}
       <ProverbsDataTable
-        proverbs={proverbs || []}
+        proverbs={uniqueProverbs}
         isLoading={isLoading}
         onEdit={openEditModal}
         onDelete={(id) => {
-          const proverb = proverbs?.find(p => p.id === id);
+          const proverb = uniqueProverbs.find(p => p.id === id);
           handleDeleteClick(id, proverb?.proverb || 'this proverb');
         }}
       />
@@ -266,6 +279,63 @@ export default function ProverbsPage() {
             >
               Previous
             </button>
+            
+            {/* Page Numbers */}
+            <div className="flex gap-1">
+              {(() => {
+                const totalPages = Math.ceil(total / limit);
+                const pageNumbers = [];
+                const maxVisible = 7;
+                
+                if (totalPages <= maxVisible) {
+                  // Show all pages
+                  for (let i = 1; i <= totalPages; i++) {
+                    pageNumbers.push(i);
+                  }
+                } else {
+                  // Show first, last, and pages around current
+                  if (page <= 3) {
+                    // Near start
+                    for (let i = 1; i <= 5; i++) pageNumbers.push(i);
+                    pageNumbers.push('...');
+                    pageNumbers.push(totalPages);
+                  } else if (page >= totalPages - 2) {
+                    // Near end
+                    pageNumbers.push(1);
+                    pageNumbers.push('...');
+                    for (let i = totalPages - 4; i <= totalPages; i++) pageNumbers.push(i);
+                  } else {
+                    // Middle
+                    pageNumbers.push(1);
+                    pageNumbers.push('...');
+                    for (let i = page - 1; i <= page + 1; i++) pageNumbers.push(i);
+                    pageNumbers.push('...');
+                    pageNumbers.push(totalPages);
+                  }
+                }
+                
+                return pageNumbers.map((num, idx) => 
+                  num === '...' ? (
+                    <span key={`ellipsis-${idx}`} className="px-3 py-1 text-sm text-gray-500">
+                      ...
+                    </span>
+                  ) : (
+                    <button
+                      key={num}
+                      onClick={() => setPage(num as number)}
+                      className={`px-3 py-1 text-sm font-medium rounded-lg transition-colors ${
+                        page === num
+                          ? 'bg-brand-600 text-white'
+                          : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      {num}
+                    </button>
+                  )
+                );
+              })()}
+            </div>
+            
             <button
               onClick={() => setPage(page + 1)}
               disabled={page * limit >= total}

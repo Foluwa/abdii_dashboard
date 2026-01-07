@@ -172,6 +172,7 @@ export const useAuth = () => {
 export const useRequireAuth = (requiredPermission?: string) => {
   const { isAuthenticated, isLoading, checkPermission, user } = useAuth();
   const router = useRouter();
+  const [shouldRender, setShouldRender] = React.useState(false);
 
   useEffect(() => {
     console.log('🔒 ROUTE PROTECTION CHECK:', {
@@ -186,6 +187,7 @@ export const useRequireAuth = (requiredPermission?: string) => {
     // Don't redirect while still loading
     if (isLoading) {
       console.log('⏳ Still loading auth state, skipping redirect check');
+      setShouldRender(false);
       return;
     }
 
@@ -195,16 +197,23 @@ export const useRequireAuth = (requiredPermission?: string) => {
     // Only redirect if truly not authenticated (no user AND no token)
     if (!isAuthenticated && !hasToken) {
       console.log('❌ Not authenticated, redirecting to login');
-      router.push('/');
+      setShouldRender(false);
+      // Use replace instead of push to prevent back button issues
+      router.replace('/');
       return;
     }
 
     // Check permission if required
     if (requiredPermission && user && !checkPermission(requiredPermission)) {
       console.log('⛔ Permission denied, redirecting to dashboard');
-      router.push('/dashboard');
+      setShouldRender(false);
+      router.replace('/dashboard');
+      return;
     }
+
+    // If we get here, user is authenticated
+    setShouldRender(true);
   }, [isAuthenticated, isLoading, requiredPermission, checkPermission, router, user]);
 
-  return { isLoading };
+  return { isLoading: isLoading || !shouldRender };
 };

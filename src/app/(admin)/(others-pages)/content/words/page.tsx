@@ -10,6 +10,7 @@ import Alert from "@/components/ui/alert/SimpleAlert";
 import { StyledSelect } from "@/components/ui/form/StyledSelect";
 import WordsDataTable from "@/components/tables/WordsDataTable";
 import { Modal } from "@/components/ui/modal";
+import { RegenerateAudioModal } from "@/components/modals/RegenerateAudioModal";
 import { FiPlus, FiGlobe, FiTrash2, FiVolume2 } from "react-icons/fi";
 
 export default function WordsPage() {
@@ -27,6 +28,8 @@ export default function WordsPage() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioPreview, setAudioPreview] = useState<string | null>(null);
   const [uploadingAudio, setUploadingAudio] = useState(false);
+  const [showRegenerateModal, setShowRegenerateModal] = useState(false);
+  const [regeneratingWord, setRegeneratingWord] = useState<any | null>(null);
 
   const { words, total, isLoading, isError, refresh } = useWords({ 
     language_id: selectedLanguage, 
@@ -35,6 +38,19 @@ export default function WordsPage() {
     limit 
   });
   const { languages } = useLanguages();
+
+  // Deduplicate words to prevent duplicate key errors
+  const uniqueWords = React.useMemo(() => {
+    if (!words) return [];
+    const seen = new Set<string>();
+    return words.filter((word) => {
+      if (seen.has(word.id)) {
+        return false;
+      }
+      seen.add(word.id);
+      return true;
+    });
+  }, [words]);
 
   const [formData, setFormData] = useState({
     language_id: "",
@@ -241,6 +257,23 @@ export default function WordsPage() {
     }
   };
 
+  const handleRegenerateAudio = async (wordId: string) => {
+    // Find the word to get its details
+    const word = words?.find(w => w.id === wordId);
+    if (!word) {
+      toast.error("Word not found");
+      return;
+    }
+    
+    // Open modal with word details
+    setRegeneratingWord({
+      id: word.id,
+      lemma: word.word,
+      language_code: word.language_code || 'yor' // Fallback to Yoruba
+    });
+    setShowRegenerateModal(true);
+  };
+
   if (isError) {
     return (
       <div className="space-y-6">
@@ -389,10 +422,11 @@ export default function WordsPage() {
 
       {/* Data Table */}
       <WordsDataTable
-        words={words || []}
+        words={uniqueWords}
         isLoading={isLoading}
         onEdit={openEditModal}
         onDelete={handleDelete}
+        onRegenerateAudio={handleRegenerateAudio}
         onSearch={(query) => {
           setSearch(query);
           setPage(1);
@@ -736,6 +770,19 @@ export default function WordsPage() {
           </form>
         </div>
       </Modal>
+
+      {/* Regenerate Audio Modal */}
+      <RegenerateAudioModal
+        isOpen={showRegenerateModal}
+        onClose={() => {
+          setShowRegenerateModal(false);
+          setRegeneratingWord(null);
+        }}
+        word={regeneratingWord}
+        onSuccess={() => {
+          setTimeout(() => refresh(), 2000);
+        }}
+      />
     </div>
   );
 }

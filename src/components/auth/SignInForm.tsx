@@ -12,8 +12,8 @@ import Alert from "@/components/ui/alert/SimpleAlert";
 export default function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("folu@abidii.app");
+  const [password, setPassword] = useState("Aderonke#DXB234");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 

@@ -97,7 +97,18 @@ export default function NumbersPage() {
       const response = await apiClient.get<NumbersResponse>(
         `/api/v1/admin/numbers?${params.toString()}`
       );
-      setNumbers(response.data.items);
+      
+      // Deduplicate numbers to prevent duplicate key errors
+      const seen = new Set<string>();
+      const uniqueNumbers = response.data.items.filter((num) => {
+        if (seen.has(num.id)) {
+          return false;
+        }
+        seen.add(num.id);
+        return true;
+      });
+      
+      setNumbers(uniqueNumbers);
       setTotal(response.data.total);
     } catch (error) {
       console.error("Failed to fetch numbers:", error);

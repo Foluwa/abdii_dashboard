@@ -24,6 +24,7 @@ import {
   Proverb,
   AlertHistoryItem,
   ConfigEntry,
+  AppSetting,
   PaginatedResponse,
   UserFilters,
   ContentFilters,
@@ -166,16 +167,34 @@ export function useAdminUsers() {
 }
 
 /**
- * Configuration Hook
+ * Configuration Hook - Feature Flags Management
  */
 export function useConfig() {
   const { data, error, mutate } = useSWR<ConfigEntry[]>(
-    '/api/v1/admin/config',
+    '/api/v1/admin/configs',
     fetcher
   );
 
   return {
     config: data || [],
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
+/**
+ * App Settings Hook - JSONB-based Settings Management
+ */
+export function useAppSettings(category?: string) {
+  const url = category
+    ? `/api/v1/admin/configs/app-settings?category=${category}`
+    : '/api/v1/admin/configs/app-settings';
+  
+  const { data, error, mutate } = useSWR<AppSetting[]>(url, fetcher);
+
+  return {
+    settings: data || [],
     isLoading: !error && !data,
     isError: error,
     refresh: mutate,

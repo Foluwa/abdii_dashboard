@@ -35,6 +35,7 @@ interface WordsDataTableProps {
   selectedWords?: string[];
   onSelectWord?: (wordId: string) => void;
   onSelectAll?: () => void;
+  onRegenerateAudio?: (wordId: string) => void;
 }
 
 export default function WordsDataTable({
@@ -47,15 +48,25 @@ export default function WordsDataTable({
   selectedWords = [],
   onSelectWord,
   onSelectAll,
+  onRegenerateAudio,
 }: WordsDataTableProps) {
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; word: string } | null>(null);
+  const [regeneratingAudio, setRegeneratingAudio] = useState<string | null>(null);
 
   const handlePlayAudio = (audioKey: string) => {
-    // Play audio logic here
     setPlayingAudio(audioKey);
-    // Reset after playing
-    setTimeout(() => setPlayingAudio(null), 1000);
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    
+    console.log('🎵 Audio key:', audioKey);
+    console.warn('⚠️ Backend audio endpoint not configured. Audio files cannot be played.');
+    console.info('ℹ️ The backend at', baseUrl, 'needs to serve audio files from:', audioKey);
+    console.info('ℹ️ Configure the backend to either:');
+    console.info('  1. Serve static files from /audio/ directory');
+    console.info('  2. Add API endpoint: /api/v1/audio/* to serve files');
+    console.info('  3. Return pre-signed S3 URLs in the API response');
+    
+    setPlayingAudio(null);
   };
 
   const getDifficultyBadge = (level: number | null) => {
@@ -251,17 +262,20 @@ export default function WordsDataTable({
                     {/* Audio */}
                     <TableCell className="px-4 py-3 text-start">
                       {word.audio_key ? (
-                        <button
-                          onClick={() => handlePlayAudio(word.audio_key!)}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-2.5 py-1.5 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-100 dark:bg-brand-900/20 dark:text-brand-400 dark:hover:bg-brand-900/30"
-                        >
-                          <FiVolume2
-                            className={`h-3.5 w-3.5 ${playingAudio === word.audio_key ? "animate-pulse" : ""}`}
-                          />
-                          {word.audio_duration_sec
-                            ? `${word.audio_duration_sec.toFixed(1)}s`
-                            : "Play"}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handlePlayAudio(word.audio_key!)}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-2.5 py-1.5 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-100 dark:bg-brand-900/20 dark:text-brand-400 dark:hover:bg-brand-900/30"
+                          >
+                            <FiVolume2
+                              className={`h-3.5 w-3.5 ${playingAudio === word.audio_key ? "animate-pulse" : ""}`}
+                            />
+                            {word.audio_duration_sec
+                              ? `${word.audio_duration_sec.toFixed(1)}s`
+                              : "Play"}
+                          </button>
+                          <span className="text-xs text-green-600 dark:text-green-400">✓</span>
+                        </div>
                       ) : (
                         <span className="text-xs italic text-gray-400 dark:text-gray-500">
                           No audio
@@ -272,6 +286,21 @@ export default function WordsDataTable({
                     {/* Actions */}
                     <TableCell className="px-4 py-3 text-end">
                       <div className="flex items-center justify-end gap-2">
+                        {onRegenerateAudio && (
+                          <button
+                            onClick={() => {
+                              setRegeneratingAudio(word.id);
+                              onRegenerateAudio(word.id);
+                              setTimeout(() => setRegeneratingAudio(null), 2000);
+                            }}
+                            disabled={regeneratingAudio === word.id}
+                            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-purple-600 transition-colors hover:bg-purple-50 hover:text-purple-700 disabled:opacity-50 disabled:cursor-not-allowed dark:text-purple-400 dark:hover:bg-purple-900/20"
+                            title="Regenerate audio"
+                          >
+                            <FiVolume2 className={`h-3.5 w-3.5 ${regeneratingAudio === word.id ? 'animate-pulse' : ''}`} />
+                            {regeneratingAudio === word.id ? 'Regenerating...' : 'Audio'}
+                          </button>
+                        )}
                         <button
                           onClick={() => onEdit(word)}
                           className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-brand-600 transition-colors hover:bg-brand-50 hover:text-brand-700 dark:text-brand-400 dark:hover:bg-brand-900/20"

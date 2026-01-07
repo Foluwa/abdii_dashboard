@@ -20,6 +20,16 @@ export interface ConfigEntry {
   updated_at: string;
 }
 
+export interface AppSetting {
+  setting_key: string;
+  setting_value: Record<string, any>;
+  description: string | null;
+  category: string;
+  is_public: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export type AlertLevel = 'critical' | 'error' | 'warning' | 'info';
 export type AlertCategory = 'telegram' | 'system' | 'resource' | 'error';
 
@@ -168,6 +178,7 @@ export interface Proverb {
   translation: string;
   meaning: string | null;
   category: string | null;
+  audio_url?: string | null;
   created_at: string;
   updated_at: string;
 }
