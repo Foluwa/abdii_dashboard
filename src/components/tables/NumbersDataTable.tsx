@@ -174,7 +174,8 @@ const NumbersDataTable: React.FC<Props> = ({
                   </span>
                 )}
               </td>
-udio */}
+
+              {/* Audio */}
               <td className="px-4 py-3">
                 {number.audio && number.audio.length > 0 ? (
                   <div className="flex items-center gap-2">
@@ -199,7 +200,6 @@ udio */}
                 )}
               </td>
 
-              {/* A
               {/* Actions */}
               <td className="px-6 py-4 text-right">
                 <div className="flex items-center justify-end gap-2">
