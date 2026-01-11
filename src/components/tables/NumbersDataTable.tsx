@@ -87,8 +87,7 @@ const NumbersDataTable: React.FC<Props> = ({
         <p className="text-gray-600 dark:text-gray-400">No numbers found</p>
         <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
           Try adjusting your filters or add new numbers
-        </p>">Audio</th>
-            <th scope="col" className="px-6 py-3
+        </p>
       </div>
     );
   }
