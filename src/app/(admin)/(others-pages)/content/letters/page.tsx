@@ -268,7 +268,7 @@ export default function LettersPage() {
           onChange={(e) => handleLanguageChange(e.target.value)}
           options={[
             { value: "", label: "-- Select a language --" },
-            ...languages.map((lang) => ({
+            ...languages.map((lang: Language) => ({
               value: lang.id,
               label: `${lang.name} (${lang.native_name})`
             }))

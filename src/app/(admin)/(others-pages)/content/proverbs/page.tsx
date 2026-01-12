@@ -6,6 +6,7 @@ import { apiClient } from "@/lib/api";
 import type { Proverb } from "@/types/api";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Toast from "@/components/ui/toast/Toast";
+import Alert from "@/components/ui/alert/Alert";
 import { StyledSelect } from "@/components/ui/form/StyledSelect";
 import { ConfirmationModal } from "@/components/ui/modal/ConfirmationModal";
 import ProverbsDataTable from "@/components/tables/ProverbsDataTable";
@@ -36,7 +37,7 @@ export default function ProverbsPage() {
   const uniqueProverbs = React.useMemo(() => {
     if (!proverbs) return [];
     const seen = new Set<number>();
-    return proverbs.filter((proverb) => {
+    return proverbs.filter((proverb: Proverb) => {
       if (seen.has(proverb.id)) {
         return false;
       }
@@ -175,7 +176,7 @@ export default function ProverbsPage() {
     return (
       <div className="space-y-6">
         <PageBreadCrumb pageTitle="Proverbs" />
-        <Alert variant="error">Failed to load proverbs. Please check your API connection.</Alert>
+        <Alert variant="error" title="Error" message="Failed to load proverbs. Please check your API connection." />
       </div>
     );
   }
@@ -260,7 +261,7 @@ export default function ProverbsPage() {
         isLoading={isLoading}
         onEdit={openEditModal}
         onDelete={(id) => {
-          const proverb = uniqueProverbs.find(p => p.id === id);
+          const proverb = uniqueProverbs.find((p: Proverb) => p.id === id);
           handleDeleteClick(id, proverb?.proverb || 'this proverb');
         }}
       />
@@ -355,7 +356,7 @@ export default function ProverbsPage() {
               {editingProverb ? "Edit Proverb" : "Add New Proverb"}
             </h2>
             
-            {errorMessage && <Alert variant="error" className="mb-4">{errorMessage}</Alert>}
+            {errorMessage && <Alert variant="error" title="Error" message={errorMessage} />}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <StyledSelect

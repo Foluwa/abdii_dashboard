@@ -3,8 +3,10 @@
 import React, { useState } from "react";
 import { useLanguages } from "@/hooks/useApi";
 import { apiClient } from "@/lib/api";
+import type { Language } from "@/types/api";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Toast from "@/components/ui/toast/Toast";
+import Alert from "@/components/ui/alert/Alert";
 import { StyledSelect } from "@/components/ui/form/StyledSelect";
 import NumbersDataTable from "@/components/tables/NumbersDataTable";
 import { Modal } from "@/components/ui/modal";
@@ -219,13 +221,7 @@ export default function NumbersPage() {
 
   return (
     <div className="p-6">
-      <PageBreadCrumb
-        items={[
-          { label: "Dashboard", href: "/" },
-          { label: "Content", href: "/content" },
-          { label: "Numbers", active: true },
-        ]}
-      />
+      <PageBreadCrumb pageTitle="Numbers" />
 
       <div className="mt-6">
         <div className="flex items-center justify-between mb-6">
@@ -266,7 +262,7 @@ export default function NumbersPage() {
               }}
               options={[
                 { value: "", label: "All Languages" },
-                ...(languages?.map((lang) => ({
+                ...(languages?.map((lang: Language) => ({
                   value: lang.id,
                   label: lang.name
                 })) || [])
@@ -404,7 +400,7 @@ export default function NumbersPage() {
         >
           <form onSubmit={handleSubmit} className="space-y-5">
             {errorMessage && (
-              <Alert type="error" message={errorMessage} />
+              <Alert variant="error" title="Error" message={errorMessage} />
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -417,7 +413,7 @@ export default function NumbersPage() {
                   onChange={(e) => setFormData({ ...formData, language_id: e.target.value })}
                   options={[
                     { value: "", label: "Select Language" },
-                    ...(languages?.map((lang) => ({
+                    ...(languages?.map((lang: Language) => ({
                       value: lang.id,
                       label: lang.name
                     })) || [])

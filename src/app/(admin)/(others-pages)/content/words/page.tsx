@@ -15,7 +15,7 @@ import { FiPlus, FiGlobe, FiTrash2, FiVolume2 } from "react-icons/fi";
 
 export default function WordsPage() {
   const toast = useToast();
-  const [selectedLanguage, setSelectedLanguage] = useState<string | undefined>(undefined);
+  const [selectedLanguage, setSelectedLanguage] = useState<number | undefined>(undefined);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
@@ -43,11 +43,12 @@ export default function WordsPage() {
   const uniqueWords = React.useMemo(() => {
     if (!words) return [];
     const seen = new Set<string>();
-    return words.filter((word) => {
-      if (seen.has(word.id)) {
+    return words.filter((word: any) => {
+      const id = String(word.id);
+      if (seen.has(id)) {
         return false;
       }
-      seen.add(word.id);
+      seen.add(id);
       return true;
     });
   }, [words]);
@@ -132,7 +133,7 @@ export default function WordsPage() {
     if (selectedWords.length === words.length) {
       setSelectedWords([]);
     } else {
-      setSelectedWords(words.map(w => w.id));
+      setSelectedWords(words.map((w: any) => String(w.id)));
     }
   };
 
@@ -259,7 +260,7 @@ export default function WordsPage() {
 
   const handleRegenerateAudio = async (wordId: string) => {
     // Find the word to get its details
-    const word = words?.find(w => w.id === wordId);
+    const word = words?.find((w: any) => w.id === wordId);
     if (!word) {
       toast.error("Word not found");
       return;
@@ -343,9 +344,9 @@ export default function WordsPage() {
                 </div>
               </label>
               <StyledSelect
-                value={selectedLanguage || ""}
+                value={selectedLanguage?.toString() || ""}
                 onChange={(e) => {
-                  setSelectedLanguage(e.target.value || undefined);
+                  setSelectedLanguage(e.target.value ? Number(e.target.value) : undefined);
                   setPage(1);
                 }}
                 options={[

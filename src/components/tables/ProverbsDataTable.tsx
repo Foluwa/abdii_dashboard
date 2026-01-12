@@ -7,18 +7,7 @@ import {
   TableRow,
 } from "../ui/table";
 import { FiEdit, FiTrash2, FiVolume2 } from "react-icons/fi";
-
-interface Proverb {
-  id: number;
-  language_id: number;
-  proverb: string;
-  translation: string;
-  meaning?: string;
-  category?: string;
-  audio_url?: string;
-  created_at: string;
-  updated_at: string;
-}
+import type { Proverb } from "@/types/api";
 
 interface ProverbsDataTableProps {
   proverbs: Proverb[];

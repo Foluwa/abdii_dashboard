@@ -11,6 +11,7 @@ interface Number {
   is_compound: boolean;
   number_system: string;
   difficulty_level: number;
+  display_order: number;
   is_active: boolean;
   audio?: Array<{
     id: string;

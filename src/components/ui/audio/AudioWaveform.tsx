@@ -30,7 +30,7 @@ export const AudioWaveform: React.FC<AudioWaveformProps> = ({
   const [isMuted, setIsMuted] = useState(false);
   const [waveformData, setWaveformData] = useState<number[]>([]);
   const [hasError, setHasError] = useState(false);
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | undefined>(undefined);
 
   // Load and analyze audio
   useEffect(() => {
