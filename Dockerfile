@@ -16,6 +16,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# Ensure .env.production is present for Next.js build
+# (NEXT_PUBLIC_* vars are baked into the JS at build time)
+RUN if [ ! -f .env.production ]; then echo "Warning: .env.production not found"; fi
+
 # Set environment variables for build
 ENV NEXT_TELEMETRY_DISABLED=1
 
