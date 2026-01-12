@@ -22,10 +22,10 @@ build
 # Debug
 *.log
 
-# Local env files
+# Local env files (keep .env.production for Docker builds)
 .env*.local
 .env.development
-.env.production
+# .env.production - KEEP THIS for Docker builds!
 
 # Vercel
 .vercel
