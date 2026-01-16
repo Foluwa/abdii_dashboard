@@ -58,6 +58,12 @@ const navItems: NavItem[] = [
     ],
   },
   {
+    icon: <TableIcon />,
+    name: "Subscriptions",
+    permission: "users:read", // Admin only
+    path: "/subscriptions",
+  },
+  {
     name: "Content",
     icon: <ListIcon />,
     permission: "content:read", // Admin & Manager
@@ -98,6 +104,8 @@ const othersItems: NavItem[] = [
     icon: <BoxCubeIcon />,
     name: "Settings",
     subItems: [
+      { name: "Language Settings", path: "/settings/language-settings" },
+      { name: "App Config", path: "/settings/app-config" },
       { name: "Change Password", path: "/settings/change-password" },
       { name: "Profile", path: "/profile" },
     ],

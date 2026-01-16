@@ -190,3 +190,154 @@ export interface ContentFilters {
   page?: number;
   page_size?: number;
 }
+
+/**
+ * Learning Engine v2 Types
+ */
+
+// Content Pattern
+export interface ContentPattern {
+  id: string;
+  language_id: string;
+  pattern_key: string;
+  title: string;
+  subtitle: string | null;
+  description: string | null;
+  difficulty: number;
+  category: string | null;
+  sort_order: number;
+  config: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContentPatternCreate {
+  language_id: string;
+  pattern_key: string;
+  title: string;
+  subtitle?: string;
+  description?: string;
+  difficulty?: number;
+  category?: string;
+  sort_order?: number;
+  config?: Record<string, unknown>;
+}
+
+export interface ContentPatternUpdate {
+  pattern_key?: string;
+  title?: string;
+  subtitle?: string;
+  description?: string;
+  difficulty?: number;
+  category?: string;
+  sort_order?: number;
+  config?: Record<string, unknown>;
+}
+
+// Pattern Explanation
+export interface PatternExplanation {
+  id: string;
+  language_id: string;
+  target_type: 'pattern' | 'content_item';
+  target_id: string;
+  explanation_type: 'how' | 'why' | 'rule' | 'mnemonic' | 'history' | 'tip';
+  title: string;
+  body: string;
+  body_rich: unknown | null;
+  is_brief_default: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PatternExplanationCreate {
+  language_id: string;
+  target_type: 'pattern' | 'content_item';
+  target_id: string;
+  explanation_type: string;
+  title: string;
+  body: string;
+  body_rich?: unknown;
+  is_brief_default?: boolean;
+  sort_order?: number;
+}
+
+export interface PatternExplanationUpdate {
+  explanation_type?: string;
+  title?: string;
+  body?: string;
+  body_rich?: unknown;
+  is_brief_default?: boolean;
+  sort_order?: number;
+}
+
+// Content Asset
+export interface ContentAsset {
+  id: string;
+  language_id: string;
+  target_type: 'pattern' | 'content_item' | 'learning_item';
+  target_id: string;
+  asset_type: 'svg' | 'image' | 'audio' | 'video' | 'lottie';
+  asset_role: 'illustration' | 'diagram' | 'icon' | 'animation' | 'audio_clip';
+  asset_url: string | null;
+  svg_content: string | null;
+  alt_text: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContentAssetCreate {
+  language_id: string;
+  target_type: string;
+  target_id: string;
+  asset_type: string;
+  asset_role: string;
+  asset_url?: string;
+  svg_content?: string;
+  alt_text?: string;
+  sort_order?: number;
+}
+
+export interface ContentAssetUpdate {
+  asset_type?: string;
+  asset_role?: string;
+  asset_url?: string;
+  svg_content?: string;
+  alt_text?: string;
+  sort_order?: number;
+}
+
+// Content Example
+export interface ContentExample {
+  id: string;
+  language_id: string;
+  target_type: 'pattern' | 'content_item';
+  target_id: string;
+  example_text: string;
+  translation_text: string | null;
+  context_tag: string | null;
+  difficulty: number;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContentExampleCreate {
+  language_id: string;
+  target_type: string;
+  target_id: string;
+  example_text: string;
+  translation_text?: string;
+  context_tag?: string;
+  difficulty?: number;
+  sort_order?: number;
+}
+
+export interface ContentExampleUpdate {
+  example_text?: string;
+  translation_text?: string;
+  context_tag?: string;
+  difficulty?: number;
+  sort_order?: number;
+}

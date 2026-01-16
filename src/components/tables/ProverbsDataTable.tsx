@@ -6,7 +6,8 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
-import { FiEdit, FiTrash2, FiVolume2 } from "react-icons/fi";
+import { FiEdit, FiTrash2 } from "react-icons/fi";
+import { AudioWaveform } from "@/components/ui/audio/AudioWaveform";
 import type { Proverb } from "@/types/api";
 
 interface ProverbsDataTableProps {
@@ -22,11 +23,6 @@ export default function ProverbsDataTable({
   onEdit,
   onDelete,
 }: ProverbsDataTableProps) {
-  const playAudio = (audioUrl: string) => {
-    const audio = new Audio(audioUrl);
-    audio.play().catch(err => console.error("Failed to play audio:", err));
-  };
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -100,13 +96,15 @@ export default function ProverbsDataTable({
                   {/* Audio */}
                   <TableCell className="px-5 py-4">
                     {proverb.audio_url ? (
-                      <button
-                        onClick={() => playAudio(proverb.audio_url!)}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-green-600 bg-green-50 dark:bg-green-900/20 dark:text-green-400 rounded hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
-                      >
-                        <FiVolume2 className="w-3.5 h-3.5" />
-                        Play
-                      </button>
+                      <div className="min-w-[280px] max-w-md">
+                        <AudioWaveform
+                          src={proverb.audio_url}
+                          height={40}
+                          waveColor="#94a3b8"
+                          progressColor="#3b82f6"
+                          cursorColor="#1d4ed8"
+                        />
+                      </div>
                     ) : (
                       <span className="text-xs text-gray-400 dark:text-gray-600">No audio</span>
                     )}

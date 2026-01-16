@@ -9,6 +9,7 @@ import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Alert from "@/components/ui/alert/SimpleAlert";
 import PlatformDistributionChart from "@/components/charts/PlatformDistributionChart";
 import MonthlySalesChart from "@/components/ecommerce/MonthlySalesChart";
+import MonthlySubscriberGrowthChart from "@/components/charts/MonthlySubscriberGrowthChart";
 import CountryMap from "@/components/ecommerce/CountryMap";
 
 export default function Dashboard() {
@@ -152,14 +153,14 @@ export default function Dashboard() {
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Platform Distribution Chart */}
+        {/* Auth Provider Distribution Chart */}
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
           <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-3 dark:border-white/[0.05] dark:bg-white/[0.02]">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-              Platform Distribution
+              Auth Provider Distribution
             </h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              Android vs iOS user breakdown
+              User signup method: Device (anonymous), Google, or Apple Sign-In
             </p>
           </div>
           <div className="p-5">
@@ -167,19 +168,34 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Monthly Premium Users Chart */}
+        {/* Monthly User Growth Chart */}
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
           <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-3 dark:border-white/[0.05] dark:bg-white/[0.02]">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-              Monthly Active Premium Users
+              Monthly User Growth
             </h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              Premium subscriptions over time
+              New user registrations per month
             </p>
           </div>
           <div className="p-5">
             <MonthlySalesChart />
           </div>
+        </div>
+      </div>
+
+      {/* Subscriber Growth Chart */}
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+        <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-3 dark:border-white/[0.05] dark:bg-white/[0.02]">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+            Monthly Subscriber Growth
+          </h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            New premium subscribers per month (first-time only)
+          </p>
+        </div>
+        <div className="p-5">
+          <MonthlySubscriberGrowthChart />
         </div>
       </div>
 

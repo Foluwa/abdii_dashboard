@@ -10,7 +10,7 @@ import Alert from "@/components/ui/alert/Alert";
 import { StyledSelect } from "@/components/ui/form/StyledSelect";
 import { ConfirmationModal } from "@/components/ui/modal/ConfirmationModal";
 import { AudioWaveform } from "@/components/ui/audio/AudioWaveform";
-import { FiGrid, FiList, FiVolume2 } from "react-icons/fi";
+import { FiGrid, FiList } from "react-icons/fi";
 
 interface Letter {
   id: string;
@@ -202,11 +202,6 @@ export default function LettersPage() {
       setDeleteConfirm(null);
       setTimeout(() => setError(""), 5000);
     }
-  };
-
-  const playAudio = (audioUrl: string) => {
-    const audio = new Audio(audioUrl);
-    audio.play().catch(err => console.error("Failed to play audio:", err));
   };
 
   return (

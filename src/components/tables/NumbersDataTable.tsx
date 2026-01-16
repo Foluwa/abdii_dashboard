@@ -1,5 +1,6 @@
-import React, { useState } from "react";
-import { FiEdit, FiTrash2, FiHash, FiVolume2 } from "react-icons/fi";
+import React from "react";
+import { FiEdit, FiTrash2, FiHash } from "react-icons/fi";
+import { AudioWaveform } from "@/components/ui/audio/AudioWaveform";
 
 interface Number {
   id: string;
@@ -13,6 +14,10 @@ interface Number {
   difficulty_level: number;
   display_order: number;
   is_active: boolean;
+  // Backend returns these fields from number_audio join
+  has_audio?: boolean;
+  audio_url?: string; // This is s3_bucket_key
+  // Legacy format (optional)
   audio?: Array<{
     id: string;
     s3_bucket_key: string;
@@ -40,26 +45,9 @@ const NumbersDataTable: React.FC<Props> = ({
   onDelete,
   languages 
 }) => {
-  const [playingAudio, setPlayingAudio] = useState<string | null>(null);
-
   const getLanguageName = (languageId: string) => {
     const lang = languages.find((l) => l.id === languageId);
     return lang?.name || "Unknown";
-  };
-
-  const playAudio = (s3Key: string) => {
-    setPlayingAudio(s3Key);
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-    
-    console.log('🎵 Audio key:', s3Key);
-    console.warn('⚠️ Backend audio endpoint not configured. Audio files cannot be played.');
-    console.info('ℹ️ The backend at', baseUrl, 'needs to serve audio files from:', s3Key);
-    console.info('ℹ️ Configure the backend to either:');
-    console.info('  1. Serve static files from /audio/ directory');
-    console.info('  2. Add API endpoint: /api/v1/audio/* to serve files');
-    console.info('  3. Return pre-signed S3 URLs in the API response');
-    
-    setPlayingAudio(null);
   };
 
   const getDifficultyBadge = (level: number) => {
@@ -178,21 +166,15 @@ const NumbersDataTable: React.FC<Props> = ({
 
               {/* Audio */}
               <td className="px-4 py-3">
-                {number.audio && number.audio.length > 0 ? (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => playAudio(number.audio![0].s3_bucket_key)}
-                      disabled={playingAudio === number.audio![0].s3_bucket_key}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-2.5 py-1.5 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-100 disabled:opacity-50 dark:bg-brand-900/20 dark:text-brand-400 dark:hover:bg-brand-900/30"
-                    >
-                      <FiVolume2
-                        className={`h-3.5 w-3.5 ${playingAudio === number.audio![0].s3_bucket_key ? "animate-pulse" : ""}`}
-                      />
-                      {number.audio[0].audio_duration_sec
-                        ? `${number.audio[0].audio_duration_sec.toFixed(1)}s`
-                        : "Play"}
-                    </button>
-                    <span className="text-xs text-green-600 dark:text-green-400">✓</span>
+                {(number.has_audio && number.audio_url) || (number.audio && number.audio.length > 0) ? (
+                  <div className="min-w-[280px] max-w-md">
+                    <AudioWaveform
+                      src={number.audio_url || number.audio![0].s3_bucket_key}
+                      height={40}
+                      waveColor="#94a3b8"
+                      progressColor="#3b82f6"
+                      cursorColor="#1d4ed8"
+                    />
                   </div>
                 ) : (
                   <span className="text-xs italic text-gray-400 dark:text-gray-500">

@@ -9,6 +9,7 @@ import {
 import Badge from "../ui/badge/Badge";
 import { FiTrash2, FiEdit, FiVolume2, FiSearch, FiFilter } from "react-icons/fi";
 import { ConfirmationModal } from "../ui/modal/ConfirmationModal";
+import { AudioWaveform } from "@/components/ui/audio/AudioWaveform";
 
 interface Word {
   id: string;
@@ -17,6 +18,7 @@ interface Word {
   pos: string;
   language_id: string;
   audio_key: string | null;
+  audio_url?: string | null;
   audio_duration_sec: number | null;
   category: string | null;
   difficulty_level: number | null;
@@ -50,24 +52,8 @@ export default function WordsDataTable({
   onSelectAll,
   onRegenerateAudio,
 }: WordsDataTableProps) {
-  const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; word: string } | null>(null);
   const [regeneratingAudio, setRegeneratingAudio] = useState<string | null>(null);
-
-  const handlePlayAudio = (audioKey: string) => {
-    setPlayingAudio(audioKey);
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-    
-    console.log('🎵 Audio key:', audioKey);
-    console.warn('⚠️ Backend audio endpoint not configured. Audio files cannot be played.');
-    console.info('ℹ️ The backend at', baseUrl, 'needs to serve audio files from:', audioKey);
-    console.info('ℹ️ Configure the backend to either:');
-    console.info('  1. Serve static files from /audio/ directory');
-    console.info('  2. Add API endpoint: /api/v1/audio/* to serve files');
-    console.info('  3. Return pre-signed S3 URLs in the API response');
-    
-    setPlayingAudio(null);
-  };
 
   const getDifficultyBadge = (level: number | null) => {
     if (!level) return null;
@@ -261,20 +247,15 @@ export default function WordsDataTable({
 
                     {/* Audio */}
                     <TableCell className="px-4 py-3 text-start">
-                      {word.audio_key ? (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handlePlayAudio(word.audio_key!)}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-2.5 py-1.5 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-100 dark:bg-brand-900/20 dark:text-brand-400 dark:hover:bg-brand-900/30"
-                          >
-                            <FiVolume2
-                              className={`h-3.5 w-3.5 ${playingAudio === word.audio_key ? "animate-pulse" : ""}`}
-                            />
-                            {word.audio_duration_sec
-                              ? `${word.audio_duration_sec.toFixed(1)}s`
-                              : "Play"}
-                          </button>
-                          <span className="text-xs text-green-600 dark:text-green-400">✓</span>
+                      {word.audio_url ? (
+                        <div className="min-w-[280px] max-w-md">
+                          <AudioWaveform
+                            src={word.audio_url}
+                            height={40}
+                            waveColor="#94a3b8"
+                            progressColor="#3b82f6"
+                            cursorColor="#1d4ed8"
+                          />
                         </div>
                       ) : (
                         <span className="text-xs italic text-gray-400 dark:text-gray-500">

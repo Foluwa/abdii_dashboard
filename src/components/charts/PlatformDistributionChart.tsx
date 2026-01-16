@@ -1,7 +1,7 @@
 "use client";
 import { ApexOptions } from "apexcharts";
 import dynamic from "next/dynamic";
-import { useUsers } from "@/hooks/useApi";
+import { usePlatformDistribution } from "@/hooks/useApi";
 import { useState } from "react";
 import { MoreDotIcon } from "@/icons";
 import { Dropdown } from "../ui/dropdown/Dropdown";
@@ -11,32 +11,44 @@ const ReactApexChart = dynamic(() => import("react-apexcharts"), {
   ssr: false,
 });
 
+/**
+ * Platform Distribution Chart
+ * Uses users.provider field (device/google/apple) from the backend analytics API
+ */
 export default function PlatformDistributionChart() {
-  const { users, isLoading, isError } = useUsers({ limit: 1000 });
+  const { distribution, total, isLoading, isError } = usePlatformDistribution();
   const [isOpen, setIsOpen] = useState(false);
 
-  // Count users by platform (assuming users have a device_platform or device_type field)
-  const platformCounts = users?.users?.reduce((acc: any, user: any) => {
-    const platform = user.device_platform || user.device_type || 'unknown';
-    acc[platform] = (acc[platform] || 0) + 1;
-    return acc;
-  }, {}) || {};
+  // Map provider names to display labels and colors
+  const providerConfig: Record<string, { label: string; color: string }> = {
+    device: { label: "Device ID", color: "#94a3b8" },
+    google: { label: "Google", color: "#4285f4" },
+    apple: { label: "Apple", color: "#000000" },
+  };
 
-  const androidCount = (platformCounts.android || 0) + (platformCounts.Android || 0);
-  const iosCount = (platformCounts.ios || 0) + (platformCounts.iOS || 0) + (platformCounts.iPhone || 0);
-  const webCount = platformCounts.web || platformCounts.Web || 0;
-  const otherCount = Object.entries(platformCounts)
-    .filter(([key]) => !['android', 'Android', 'ios', 'iOS', 'iPhone', 'web', 'Web'].includes(key))
-    .reduce((sum, [, val]) => sum + (val as number), 0);
+  // Build chart data from API response
+  const labels: string[] = [];
+  const series: number[] = [];
+  const colors: string[] = [];
+
+  distribution.forEach((item: { provider: string; count: number }) => {
+    const config = providerConfig[item.provider] || { 
+      label: item.provider, 
+      color: "#64748b" 
+    };
+    labels.push(config.label);
+    series.push(item.count);
+    colors.push(config.color);
+  });
 
   const options: ApexOptions = {
-    colors: ["#3ddc84", "#007aff", "#465fff", "#94a3b8"],
+    colors: colors.length > 0 ? colors : ["#94a3b8"],
     chart: {
       fontFamily: "Outfit, sans-serif",
       type: "donut",
       height: 300,
     },
-    labels: ["Android", "iOS", "Web", "Other"],
+    labels: labels.length > 0 ? labels : ["No Data"],
     legend: {
       position: "bottom",
       horizontalAlign: "center",
@@ -55,10 +67,7 @@ export default function PlatformDistributionChart() {
               label: "Total Users",
               fontSize: "14px",
               color: "#64748b",
-              formatter: () => {
-                const total = androidCount + iosCount + webCount + otherCount;
-                return total.toString();
-              },
+              formatter: () => total.toString(),
             },
             value: {
               fontSize: "22px",
@@ -88,15 +97,12 @@ export default function PlatformDistributionChart() {
     tooltip: {
       y: {
         formatter: (val: number) => {
-          const total = androidCount + iosCount + webCount + otherCount;
-          const percentage = ((val / total) * 100).toFixed(1);
+          const percentage = total > 0 ? ((val / total) * 100).toFixed(1) : "0";
           return `${val} users (${percentage}%)`;
         },
       },
     },
   };
-
-  const series = [androidCount, iosCount, webCount, otherCount];
 
   function toggleDropdown() {
     setIsOpen(!isOpen);
@@ -112,7 +118,7 @@ export default function PlatformDistributionChart() {
         <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
           Platform Distribution
         </h3>
-        <p className="mt-4 text-sm text-red-500">Failed to load user data</p>
+        <p className="mt-4 text-sm text-red-500">Failed to load platform data</p>
       </div>
     );
   }
@@ -125,7 +131,7 @@ export default function PlatformDistributionChart() {
             Platform Distribution
           </h3>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Users by device platform
+            Users by authentication provider
           </p>
         </div>
 
@@ -144,12 +150,6 @@ export default function PlatformDistributionChart() {
             >
               Export Data
             </DropdownItem>
-            <DropdownItem
-              onItemClick={closeDropdown}
-              className="flex w-full font-normal text-left text-gray-500 rounded-lg hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
-            >
-              View Details
-            </DropdownItem>
           </Dropdown>
         </div>
       </div>
@@ -162,30 +162,40 @@ export default function PlatformDistributionChart() {
         <div className="flex flex-col items-center">
           <ReactApexChart
             options={options}
-            series={series}
+            series={series.length > 0 ? series : [1]}
             type="donut"
             height={300}
           />
           
-          <div className="grid grid-cols-2 gap-4 mt-6 w-full">
-            <div className="p-3 bg-gray-50 rounded-lg dark:bg-gray-800">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-[#3ddc84]"></div>
-                <span className="text-sm text-gray-600 dark:text-gray-400">Android</span>
-              </div>
-              <p className="text-xl font-semibold text-gray-900 dark:text-white mt-1">
-                {androidCount}
-              </p>
-            </div>
-            <div className="p-3 bg-gray-50 rounded-lg dark:bg-gray-800">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-[#007aff]"></div>
-                <span className="text-sm text-gray-600 dark:text-gray-400">iOS</span>
-              </div>
-              <p className="text-xl font-semibold text-gray-900 dark:text-white mt-1">
-                {iosCount}
-              </p>
-            </div>
+          <div className="grid grid-cols-3 gap-3 mt-6 w-full">
+            {distribution.map((item: { provider: string; count: number; percentage: number }) => {
+              const config = providerConfig[item.provider] || {
+                label: item.provider,
+                color: "#64748b",
+              };
+              return (
+                <div
+                  key={item.provider}
+                  className="p-3 bg-gray-50 rounded-lg dark:bg-gray-800"
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: config.color }}
+                    ></div>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      {config.label}
+                    </span>
+                  </div>
+                  <p className="text-xl font-semibold text-gray-900 dark:text-white mt-1">
+                    {item.count}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {item.percentage}%
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

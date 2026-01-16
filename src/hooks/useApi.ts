@@ -113,12 +113,25 @@ export function useSystemMetrics() {
 /**
  * Users List Hook with filters
  */
-export function useUsers(filters?: { search?: string; role?: UserRole; page?: number; limit?: number }) {
+export function useUsers(filters?: { 
+  search?: string; 
+  role?: UserRole; 
+  page?: number; 
+  limit?: number;
+  is_active?: boolean;
+  provider?: string;
+  min_xp?: number;
+  max_xp?: number;
+}) {
   const params = new URLSearchParams();
   if (filters?.page) params.append('page', filters.page.toString());
   if (filters?.limit) params.append('limit', filters.limit.toString());
   if (filters?.role) params.append('role', filters.role);
   if (filters?.search) params.append('search', filters.search);
+  if (filters?.is_active !== undefined) params.append('is_active', filters.is_active.toString());
+  if (filters?.provider) params.append('provider', filters.provider);
+  if (filters?.min_xp !== undefined) params.append('min_xp', filters.min_xp.toString());
+  if (filters?.max_xp !== undefined) params.append('max_xp', filters.max_xp.toString());
 
   const url = `/api/v1/admin/users?${params.toString()}`;
 
@@ -135,7 +148,7 @@ export function useUsers(filters?: { search?: string; role?: UserRole; page?: nu
 /**
  * User Detail Hook
  */
-export function useUserDetail(userId: number) {
+export function useUserDetail(userId: string | null) {
   const { data, error, mutate } = useSWR(
     userId ? `/api/v1/admin/users/${userId}` : null,
     fetcher
@@ -322,6 +335,126 @@ export function useGames(filters?: { language_id?: number; game_type?: string; p
   return {
     games: data?.games || [],
     total: data?.total || 0,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
+// =============================================================================
+// ANALYTICS HOOKS
+// =============================================================================
+
+/**
+ * Platform Distribution Hook
+ * Returns users grouped by provider (device/google/apple)
+ */
+export function usePlatformDistribution() {
+  const { data, error, mutate } = useSWR(
+    '/api/v1/admin/analytics/platform-distribution',
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+
+  return {
+    distribution: data?.data || [],
+    total: data?.total || 0,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
+/**
+ * Monthly User Growth Hook
+ * Returns new user registrations per month
+ */
+export function useMonthlyUserGrowth(months: number = 12) {
+  const { data, error, mutate } = useSWR(
+    `/api/v1/admin/analytics/monthly-user-growth?months=${months}`,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+
+  return {
+    data: data?.data || [],
+    total: data?.total || 0,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
+/**
+ * Monthly Subscriber Growth Hook
+ * Returns new subscribers per month (first-time only)
+ */
+export function useMonthlySubscriberGrowth(months: number = 12) {
+  const { data, error, mutate } = useSWR(
+    `/api/v1/admin/analytics/monthly-subscriber-growth?months=${months}`,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+
+  return {
+    data: data?.data || [],
+    total: data?.total || 0,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
+// =============================================================================
+// SUBSCRIPTIONS HOOKS
+// =============================================================================
+
+/**
+ * Subscriptions List Hook
+ */
+export function useSubscriptions(filters?: {
+  status?: string;
+  plan_id?: string;
+  provider?: string;
+  platform?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const params = new URLSearchParams();
+  if (filters?.status) params.append('status', filters.status);
+  if (filters?.plan_id) params.append('plan_id', filters.plan_id);
+  if (filters?.provider) params.append('provider', filters.provider);
+  if (filters?.platform) params.append('platform', filters.platform);
+  if (filters?.search) params.append('search', filters.search);
+  if (filters?.page) params.append('page', filters.page.toString());
+  if (filters?.limit) params.append('limit', filters.limit.toString());
+
+  const url = `/api/v1/admin/subscriptions?${params.toString()}`;
+  const { data, error, mutate } = useSWR(url, fetcher);
+
+  return {
+    subscriptions: data?.items || [],
+    total: data?.total || 0,
+    page: data?.page || 1,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
+/**
+ * Subscription Stats Hook
+ */
+export function useSubscriptionStats() {
+  const { data, error, mutate } = useSWR(
+    '/api/v1/admin/subscriptions/stats/summary',
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+
+  return {
+    stats: data,
     isLoading: !error && !data,
     isError: error,
     refresh: mutate,
