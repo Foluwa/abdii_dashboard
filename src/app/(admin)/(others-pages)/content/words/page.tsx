@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useWords, useLanguages } from "@/hooks/useApi";
 import { apiClient } from "@/lib/api";
 import { useToast } from "@/contexts/ToastContext";
@@ -11,10 +11,29 @@ import { StyledSelect } from "@/components/ui/form/StyledSelect";
 import WordsDataTable from "@/components/tables/WordsDataTable";
 import { Modal } from "@/components/ui/modal";
 import { RegenerateAudioModal } from "@/components/modals/RegenerateAudioModal";
-import { FiPlus, FiGlobe, FiTrash2, FiVolume2 } from "react-icons/fi";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { FiPlus, FiGlobe, FiTrash2, FiVolume2, FiFilter, FiX, FiChevronDown, FiChevronUp } from "react-icons/fi";
+
+// POS options for multi-select
+const POS_OPTIONS = [
+  { value: 'noun', label: 'Noun' },
+  { value: 'verb', label: 'Verb' },
+  { value: 'adjective', label: 'Adjective' },
+  { value: 'adverb', label: 'Adverb' },
+  { value: 'pronoun', label: 'Pronoun' },
+  { value: 'preposition', label: 'Preposition' },
+  { value: 'conjunction', label: 'Conjunction' },
+  { value: 'interjection', label: 'Interjection' },
+  { value: 'other', label: 'Other' },
+];
 
 export default function WordsPage() {
   const toast = useToast();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Basic state
   const [selectedLanguage, setSelectedLanguage] = useState<number | undefined>(undefined);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -31,11 +50,165 @@ export default function WordsPage() {
   const [showRegenerateModal, setShowRegenerateModal] = useState(false);
   const [regeneratingWord, setRegeneratingWord] = useState<any | null>(null);
 
-  const { words, total, isLoading, isError, refresh } = useWords({ 
-    language_id: selectedLanguage, 
+  // Advanced filter state
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [hasAudio, setHasAudio] = useState<boolean | undefined>(undefined);
+  const [hasExamples, setHasExamples] = useState<boolean | undefined>(undefined);
+  const [hasRelated, setHasRelated] = useState<boolean | undefined>(undefined);
+  const [hasPronunciation, setHasPronunciation] = useState<boolean | undefined>(undefined);
+  const [posFilter, setPosFilter] = useState<string[]>([]);
+  const [startsWithFilter, setStartsWithFilter] = useState("");
+  const [endsWithFilter, setEndsWithFilter] = useState("");
+  const [containsFilter, setContainsFilter] = useState("");
+  const [toneMarksPresent, setToneMarksPresent] = useState<boolean | undefined>(undefined);
+  const [ipaPresent, setIpaPresent] = useState<boolean | undefined>(undefined);
+  const [wordLengthMin, setWordLengthMin] = useState<number | undefined>(undefined);
+  const [wordLengthMax, setWordLengthMax] = useState<number | undefined>(undefined);
+  const [sortBy, setSortBy] = useState<'lemma' | 'created_at' | 'updated_at' | 'difficulty' | 'pos'>('lemma');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  // Initialize filters from URL params
+  useEffect(() => {
+    const langId = searchParams.get('language_id');
+    const searchQ = searchParams.get('search');
+    const pageP = searchParams.get('page');
+    const limitP = searchParams.get('limit');
+    const hasAudioP = searchParams.get('has_audio');
+    const hasExamplesP = searchParams.get('has_examples');
+    const hasRelatedP = searchParams.get('has_related');
+    const hasPronunP = searchParams.get('has_pronunciation');
+    const posP = searchParams.get('pos');
+    const startsP = searchParams.get('starts_with');
+    const endsP = searchParams.get('ends_with');
+    const containsP = searchParams.get('contains');
+    const toneP = searchParams.get('tone_marks_present');
+    const ipaP = searchParams.get('ipa_present');
+    const minLenP = searchParams.get('word_length_min');
+    const maxLenP = searchParams.get('word_length_max');
+    const sortByP = searchParams.get('sort_by');
+    const sortDirP = searchParams.get('sort_dir');
+
+    if (langId) setSelectedLanguage(Number(langId));
+    if (searchQ) setSearch(searchQ);
+    if (pageP) setPage(Number(pageP));
+    if (limitP) setLimit(Number(limitP));
+    if (hasAudioP) setHasAudio(hasAudioP === 'true');
+    if (hasExamplesP) setHasExamples(hasExamplesP === 'true');
+    if (hasRelatedP) setHasRelated(hasRelatedP === 'true');
+    if (hasPronunP) setHasPronunciation(hasPronunP === 'true');
+    if (posP) setPosFilter(posP.split(','));
+    if (startsP) setStartsWithFilter(startsP);
+    if (endsP) setEndsWithFilter(endsP);
+    if (containsP) setContainsFilter(containsP);
+    if (toneP) setToneMarksPresent(toneP === 'true');
+    if (ipaP) setIpaPresent(ipaP === 'true');
+    if (minLenP) setWordLengthMin(Number(minLenP));
+    if (maxLenP) setWordLengthMax(Number(maxLenP));
+    if (sortByP) setSortBy(sortByP as any);
+    if (sortDirP) setSortDir(sortDirP as any);
+
+    // Auto-expand if any advanced filters are active
+    if (hasAudioP || hasExamplesP || hasRelatedP || hasPronunP || posP || startsP || endsP || containsP || toneP || ipaP || minLenP || maxLenP) {
+      setShowAdvancedFilters(true);
+    }
+  }, []);
+
+  // Update URL when filters change
+  const updateURL = useCallback(() => {
+    const params = new URLSearchParams();
+    if (selectedLanguage) params.set('language_id', selectedLanguage.toString());
+    if (search) params.set('search', search);
+    if (page > 1) params.set('page', page.toString());
+    if (limit !== 50) params.set('limit', limit.toString());
+    if (hasAudio !== undefined) params.set('has_audio', hasAudio.toString());
+    if (hasExamples !== undefined) params.set('has_examples', hasExamples.toString());
+    if (hasRelated !== undefined) params.set('has_related', hasRelated.toString());
+    if (hasPronunciation !== undefined) params.set('has_pronunciation', hasPronunciation.toString());
+    if (posFilter.length > 0) params.set('pos', posFilter.join(','));
+    if (startsWithFilter) params.set('starts_with', startsWithFilter);
+    if (endsWithFilter) params.set('ends_with', endsWithFilter);
+    if (containsFilter) params.set('contains', containsFilter);
+    if (toneMarksPresent !== undefined) params.set('tone_marks_present', toneMarksPresent.toString());
+    if (ipaPresent !== undefined) params.set('ipa_present', ipaPresent.toString());
+    if (wordLengthMin) params.set('word_length_min', wordLengthMin.toString());
+    if (wordLengthMax) params.set('word_length_max', wordLengthMax.toString());
+    if (sortBy !== 'lemma') params.set('sort_by', sortBy);
+    if (sortDir !== 'asc') params.set('sort_dir', sortDir);
+
+    const queryString = params.toString();
+    router.replace(`${pathname}${queryString ? '?' + queryString : ''}`, { scroll: false });
+  }, [selectedLanguage, search, page, limit, hasAudio, hasExamples, hasRelated, hasPronunciation, posFilter, startsWithFilter, endsWithFilter, containsFilter, toneMarksPresent, ipaPresent, wordLengthMin, wordLengthMax, sortBy, sortDir, router, pathname]);
+
+  // Debounced URL update
+  useEffect(() => {
+    const timer = setTimeout(updateURL, 300);
+    return () => clearTimeout(timer);
+  }, [updateURL]);
+
+  // Count active filters
+  const activeFilterCount = [
+    hasAudio !== undefined,
+    hasExamples !== undefined,
+    hasRelated !== undefined,
+    hasPronunciation !== undefined,
+    posFilter.length > 0,
+    startsWithFilter,
+    endsWithFilter,
+    containsFilter,
+    toneMarksPresent !== undefined,
+    ipaPresent !== undefined,
+    wordLengthMin !== undefined,
+    wordLengthMax !== undefined,
+  ].filter(Boolean).length;
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    setHasAudio(undefined);
+    setHasExamples(undefined);
+    setHasRelated(undefined);
+    setHasPronunciation(undefined);
+    setPosFilter([]);
+    setStartsWithFilter("");
+    setEndsWithFilter("");
+    setContainsFilter("");
+    setToneMarksPresent(undefined);
+    setIpaPresent(undefined);
+    setWordLengthMin(undefined);
+    setWordLengthMax(undefined);
+    setSortBy('lemma');
+    setSortDir('asc');
+    setPage(1);
+  };
+
+  // Toggle POS filter
+  const togglePosFilter = (pos: string) => {
+    setPosFilter(prev => 
+      prev.includes(pos) 
+        ? prev.filter(p => p !== pos) 
+        : [...prev, pos]
+    );
+    setPage(1);
+  };
+
+  const { words, total, isLoading, isError, refresh, filtersApplied } = useWords({ 
+    language_id: selectedLanguage?.toString(), 
     search, 
     page, 
-    limit 
+    limit,
+    has_audio: hasAudio,
+    has_examples: hasExamples,
+    has_related: hasRelated,
+    has_pronunciation: hasPronunciation,
+    pos: posFilter.length > 0 ? posFilter.join(',') : undefined,
+    starts_with: startsWithFilter || undefined,
+    ends_with: endsWithFilter || undefined,
+    contains: containsFilter || undefined,
+    tone_marks_present: toneMarksPresent,
+    ipa_present: ipaPresent,
+    word_length_min: wordLengthMin,
+    word_length_max: wordLengthMax,
+    sort_by: sortBy,
+    sort_dir: sortDir,
   });
   const { languages } = useLanguages();
 
@@ -331,9 +504,31 @@ export default function WordsPage() {
       {/* Filters Card */}
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
         <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-3 dark:border-white/[0.05] dark:bg-white/[0.02]">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Filters</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Filters</h3>
+            <div className="flex items-center gap-2">
+              {activeFilterCount > 0 && (
+                <button
+                  onClick={clearAllFilters}
+                  className="inline-flex items-center gap-1 rounded-md bg-red-100 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50"
+                >
+                  <FiX className="h-3 w-3" />
+                  Clear all ({activeFilterCount})
+                </button>
+              )}
+              <button
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                <FiFilter className="h-3 w-3" />
+                Advanced
+                {showAdvancedFilters ? <FiChevronUp className="h-3 w-3" /> : <FiChevronDown className="h-3 w-3" />}
+              </button>
+            </div>
+          </div>
         </div>
         <div className="p-5">
+          {/* Basic Filters Row */}
           <div className="flex flex-wrap gap-4">
             {/* Language Filter */}
             <div className="flex-1 min-w-[200px]">
@@ -360,6 +555,47 @@ export default function WordsPage() {
               />
             </div>
 
+            {/* Sort By */}
+            <div className="min-w-[150px]">
+              <label className="mb-2 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                Sort by
+              </label>
+              <StyledSelect
+                value={sortBy}
+                onChange={(e) => {
+                  setSortBy(e.target.value as any);
+                  setPage(1);
+                }}
+                options={[
+                  { value: "lemma", label: "Alphabetical" },
+                  { value: "created_at", label: "Created Date" },
+                  { value: "updated_at", label: "Updated Date" },
+                  { value: "difficulty", label: "Difficulty" },
+                  { value: "pos", label: "Part of Speech" }
+                ]}
+                fullWidth
+              />
+            </div>
+
+            {/* Sort Direction */}
+            <div className="min-w-[120px]">
+              <label className="mb-2 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                Order
+              </label>
+              <StyledSelect
+                value={sortDir}
+                onChange={(e) => {
+                  setSortDir(e.target.value as any);
+                  setPage(1);
+                }}
+                options={[
+                  { value: "asc", label: "Ascending" },
+                  { value: "desc", label: "Descending" }
+                ]}
+                fullWidth
+              />
+            </div>
+
             {/* Items Per Page */}
             <div>
               <label className="mb-2 block text-xs font-medium text-gray-700 dark:text-gray-300">
@@ -379,6 +615,363 @@ export default function WordsPage() {
               />
             </div>
           </div>
+
+          {/* Advanced Filters Panel */}
+          {showAdvancedFilters && (
+            <div className="mt-5 border-t border-gray-100 pt-5 dark:border-white/[0.05]">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {/* Boolean Filters Column */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Content Flags</h4>
+                  
+                  {/* Has Audio */}
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={hasAudio === true}
+                        onChange={(e) => setHasAudio(e.target.checked ? true : undefined)}
+                        className="peer sr-only"
+                      />
+                      <div className="h-5 w-9 rounded-full bg-gray-200 peer-checked:bg-brand-600 transition-colors dark:bg-gray-700" />
+                      <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4 shadow-sm" />
+                    </div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white">
+                      Has Audio
+                    </span>
+                    {hasAudio !== undefined && (
+                      <button onClick={() => setHasAudio(undefined)} className="text-gray-400 hover:text-gray-600">
+                        <FiX className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </label>
+
+                  {/* Has Examples */}
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={hasExamples === true}
+                        onChange={(e) => setHasExamples(e.target.checked ? true : undefined)}
+                        className="peer sr-only"
+                      />
+                      <div className="h-5 w-9 rounded-full bg-gray-200 peer-checked:bg-brand-600 transition-colors dark:bg-gray-700" />
+                      <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4 shadow-sm" />
+                    </div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white">
+                      Has Examples
+                    </span>
+                    {hasExamples !== undefined && (
+                      <button onClick={() => setHasExamples(undefined)} className="text-gray-400 hover:text-gray-600">
+                        <FiX className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </label>
+
+                  {/* Has Related Terms */}
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={hasRelated === true}
+                        onChange={(e) => setHasRelated(e.target.checked ? true : undefined)}
+                        className="peer sr-only"
+                      />
+                      <div className="h-5 w-9 rounded-full bg-gray-200 peer-checked:bg-brand-600 transition-colors dark:bg-gray-700" />
+                      <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4 shadow-sm" />
+                    </div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white">
+                      Has Related Terms
+                    </span>
+                    {hasRelated !== undefined && (
+                      <button onClick={() => setHasRelated(undefined)} className="text-gray-400 hover:text-gray-600">
+                        <FiX className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </label>
+
+                  {/* Has Pronunciation */}
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={hasPronunciation === true}
+                        onChange={(e) => setHasPronunciation(e.target.checked ? true : undefined)}
+                        className="peer sr-only"
+                      />
+                      <div className="h-5 w-9 rounded-full bg-gray-200 peer-checked:bg-brand-600 transition-colors dark:bg-gray-700" />
+                      <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4 shadow-sm" />
+                    </div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white">
+                      Has IPA Pronunciation
+                    </span>
+                    {hasPronunciation !== undefined && (
+                      <button onClick={() => setHasPronunciation(undefined)} className="text-gray-400 hover:text-gray-600">
+                        <FiX className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </label>
+
+                  {/* Tone Marks Present */}
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={toneMarksPresent === true}
+                        onChange={(e) => setToneMarksPresent(e.target.checked ? true : undefined)}
+                        className="peer sr-only"
+                      />
+                      <div className="h-5 w-9 rounded-full bg-gray-200 peer-checked:bg-brand-600 transition-colors dark:bg-gray-700" />
+                      <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4 shadow-sm" />
+                    </div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white">
+                      Has Tone Marks (ẹ́, ọ̀, etc.)
+                    </span>
+                    {toneMarksPresent !== undefined && (
+                      <button onClick={() => setToneMarksPresent(undefined)} className="text-gray-400 hover:text-gray-600">
+                        <FiX className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </label>
+
+                  {/* IPA Present */}
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={ipaPresent === true}
+                        onChange={(e) => setIpaPresent(e.target.checked ? true : undefined)}
+                        className="peer sr-only"
+                      />
+                      <div className="h-5 w-9 rounded-full bg-gray-200 peer-checked:bg-brand-600 transition-colors dark:bg-gray-700" />
+                      <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4 shadow-sm" />
+                    </div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white">
+                      Has IPA Transcription
+                    </span>
+                    {ipaPresent !== undefined && (
+                      <button onClick={() => setIpaPresent(undefined)} className="text-gray-400 hover:text-gray-600">
+                        <FiX className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </label>
+                </div>
+
+                {/* Text Pattern Filters Column */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Text Patterns</h4>
+                  
+                  {/* Starts With */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Starts with
+                    </label>
+                    <input
+                      type="text"
+                      value={startsWithFilter}
+                      onChange={(e) => {
+                        setStartsWithFilter(e.target.value);
+                        setPage(1);
+                      }}
+                      placeholder="e.g., a, ba"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-brand-500"
+                    />
+                  </div>
+
+                  {/* Contains */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Contains
+                    </label>
+                    <input
+                      type="text"
+                      value={containsFilter}
+                      onChange={(e) => {
+                        setContainsFilter(e.target.value);
+                        setPage(1);
+                      }}
+                      placeholder="e.g., ọ, sun"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-brand-500"
+                    />
+                  </div>
+
+                  {/* Ends With */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Ends with
+                    </label>
+                    <input
+                      type="text"
+                      value={endsWithFilter}
+                      onChange={(e) => {
+                        setEndsWithFilter(e.target.value);
+                        setPage(1);
+                      }}
+                      placeholder="e.g., mi, ọ"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-brand-500"
+                    />
+                  </div>
+
+                  {/* Word Length Range */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Word Length
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={wordLengthMin ?? ""}
+                        onChange={(e) => {
+                          setWordLengthMin(e.target.value ? Number(e.target.value) : undefined);
+                          setPage(1);
+                        }}
+                        placeholder="Min"
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-brand-500"
+                      />
+                      <span className="text-gray-400">-</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={wordLengthMax ?? ""}
+                        onChange={(e) => {
+                          setWordLengthMax(e.target.value ? Number(e.target.value) : undefined);
+                          setPage(1);
+                        }}
+                        placeholder="Max"
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-brand-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-brand-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Part of Speech Multi-Select Column */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Part of Speech</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {POS_OPTIONS.map((pos) => (
+                      <button
+                        key={pos.value}
+                        onClick={() => togglePosFilter(pos.value)}
+                        className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                          posFilter.includes(pos.value)
+                            ? 'bg-brand-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        {pos.label}
+                        {posFilter.includes(pos.value) && (
+                          <FiX className="ml-1.5 h-3 w-3" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                  {posFilter.length > 0 && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Selected: {posFilter.join(', ')}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Active Filter Chips */}
+          {activeFilterCount > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4 dark:border-white/[0.05]">
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Active:</span>
+              {hasAudio !== undefined && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2.5 py-1 text-xs font-medium text-brand-700 dark:bg-brand-900/30 dark:text-brand-400">
+                  Has Audio
+                  <button onClick={() => setHasAudio(undefined)} className="hover:text-brand-900">
+                    <FiX className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {hasExamples !== undefined && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                  Has Examples
+                  <button onClick={() => setHasExamples(undefined)} className="hover:text-green-900">
+                    <FiX className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {hasRelated !== undefined && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-1 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                  Has Related
+                  <button onClick={() => setHasRelated(undefined)} className="hover:text-purple-900">
+                    <FiX className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {hasPronunciation !== undefined && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-cyan-100 px-2.5 py-1 text-xs font-medium text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400">
+                  Has IPA
+                  <button onClick={() => setHasPronunciation(undefined)} className="hover:text-cyan-900">
+                    <FiX className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {toneMarksPresent !== undefined && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-1 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                  Tone Marks
+                  <button onClick={() => setToneMarksPresent(undefined)} className="hover:text-orange-900">
+                    <FiX className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {ipaPresent !== undefined && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+                  IPA Transcription
+                  <button onClick={() => setIpaPresent(undefined)} className="hover:text-indigo-900">
+                    <FiX className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {posFilter.length > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-pink-100 px-2.5 py-1 text-xs font-medium text-pink-700 dark:bg-pink-900/30 dark:text-pink-400">
+                  POS: {posFilter.join(', ')}
+                  <button onClick={() => setPosFilter([])} className="hover:text-pink-900">
+                    <FiX className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {startsWithFilter && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                  Starts: &quot;{startsWithFilter}&quot;
+                  <button onClick={() => setStartsWithFilter("")} className="hover:text-amber-900">
+                    <FiX className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {containsFilter && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-teal-100 px-2.5 py-1 text-xs font-medium text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">
+                  Contains: &quot;{containsFilter}&quot;
+                  <button onClick={() => setContainsFilter("")} className="hover:text-teal-900">
+                    <FiX className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {endsWithFilter && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-lime-100 px-2.5 py-1 text-xs font-medium text-lime-700 dark:bg-lime-900/30 dark:text-lime-400">
+                  Ends: &quot;{endsWithFilter}&quot;
+                  <button onClick={() => setEndsWithFilter("")} className="hover:text-lime-900">
+                    <FiX className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {(wordLengthMin !== undefined || wordLengthMax !== undefined) && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">
+                  Length: {wordLengthMin ?? '∞'}-{wordLengthMax ?? '∞'}
+                  <button onClick={() => { setWordLengthMin(undefined); setWordLengthMax(undefined); }} className="hover:text-rose-900">
+                    <FiX className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

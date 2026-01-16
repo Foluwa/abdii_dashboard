@@ -277,14 +277,66 @@ export function useLessons(filters?: { language_id?: number; status?: string; pa
 }
 
 /**
- * Words Hook with filters
+ * Words filter options type
  */
-export function useWords(filters?: { language_id?: number; search?: string; page?: number; limit?: number }) {
+export interface WordsFilters {
+  language_id?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+  category?: string;
+  difficulty?: number;
+  has_audio?: boolean;
+  has_examples?: boolean;
+  has_related?: boolean;
+  has_pronunciation?: boolean;
+  starts_with?: string;
+  ends_with?: string;
+  contains?: string;
+  pos?: string; // comma-separated for multiple: "noun,verb"
+  tone_marks_present?: boolean;
+  ipa_present?: boolean;
+  word_length_min?: number;
+  word_length_max?: number;
+  sort_by?: 'lemma' | 'created_at' | 'updated_at' | 'difficulty' | 'pos';
+  sort_dir?: 'asc' | 'desc';
+}
+
+/**
+ * Words Hook with comprehensive filters
+ */
+export function useWords(filters?: WordsFilters) {
   const params = new URLSearchParams();
-  if (filters?.language_id) params.append('language_id', filters.language_id.toString());
+  
+  // Basic filters
+  if (filters?.language_id) params.append('language_id', filters.language_id);
   if (filters?.search) params.append('search', filters.search);
   if (filters?.page) params.append('page', filters.page.toString());
   if (filters?.limit) params.append('limit', filters.limit.toString());
+  if (filters?.category) params.append('category', filters.category);
+  if (filters?.difficulty) params.append('difficulty', filters.difficulty.toString());
+  
+  // Boolean filters
+  if (filters?.has_audio !== undefined) params.append('has_audio', filters.has_audio.toString());
+  if (filters?.has_examples !== undefined) params.append('has_examples', filters.has_examples.toString());
+  if (filters?.has_related !== undefined) params.append('has_related', filters.has_related.toString());
+  if (filters?.has_pronunciation !== undefined) params.append('has_pronunciation', filters.has_pronunciation.toString());
+  if (filters?.tone_marks_present !== undefined) params.append('tone_marks_present', filters.tone_marks_present.toString());
+  if (filters?.ipa_present !== undefined) params.append('ipa_present', filters.ipa_present.toString());
+  
+  // Text filters
+  if (filters?.starts_with) params.append('starts_with', filters.starts_with);
+  if (filters?.ends_with) params.append('ends_with', filters.ends_with);
+  if (filters?.contains) params.append('contains', filters.contains);
+  if (filters?.pos) params.append('pos', filters.pos);
+  
+  // Numeric filters
+  if (filters?.word_length_min) params.append('word_length_min', filters.word_length_min.toString());
+  if (filters?.word_length_max) params.append('word_length_max', filters.word_length_max.toString());
+  
+  // Sorting
+  if (filters?.sort_by) params.append('sort_by', filters.sort_by);
+  if (filters?.sort_dir) params.append('sort_dir', filters.sort_dir);
 
   const url = `/api/v1/admin/content/words?${params.toString()}`;
   const { data, error, mutate } = useSWR(url, fetcher);
@@ -292,6 +344,8 @@ export function useWords(filters?: { language_id?: number; search?: string; page
   return {
     words: data?.items || [],
     total: data?.total || 0,
+    pages: data?.pages || 0,
+    filtersApplied: data?.filters_applied || {},
     isLoading: !error && !data,
     isError: error,
     refresh: mutate,
