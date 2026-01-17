@@ -514,3 +514,117 @@ export function useSubscriptionStats() {
     refresh: mutate,
   };
 }
+
+/**
+ * Game Analytics Hook
+ */
+export function useGameAnalytics(days: number = 30, gameKey?: string, languageId?: string) {
+  const params = new URLSearchParams();
+  params.append('days', days.toString());
+  if (gameKey) params.append('game_key', gameKey);
+  if (languageId) params.append('language_id', languageId);
+
+  const url = `/api/v1/admin/analytics/game-stats?${params.toString()}`;
+  const { data, error, mutate } = useSWR(url, fetcher, {
+    revalidateOnFocus: false,
+    refreshInterval: 0,
+  });
+
+  return {
+    analytics: data,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
+/**
+ * Player Leaderboard Hook
+ */
+export interface PlayerLeaderboardFilters {
+  days?: number;
+  period?: 'week' | 'month' | 'all';
+  languageId?: string;
+  gameKey?: string;
+  minSessions?: number;
+  sortBy?: 'score' | 'sessions' | 'accuracy' | 'time' | 'xp';
+  search?: string;
+  page?: number;
+  perPage?: number;
+}
+
+export function usePlayerLeaderboard(filters?: PlayerLeaderboardFilters) {
+  const params = new URLSearchParams();
+  if (filters?.days) params.append('days', filters.days.toString());
+  if (filters?.period) params.append('period', filters.period);
+  if (filters?.languageId) params.append('language_id', filters.languageId);
+  if (filters?.gameKey) params.append('game_key', filters.gameKey);
+  if (filters?.minSessions) params.append('min_sessions', filters.minSessions.toString());
+  if (filters?.sortBy) params.append('sort_by', filters.sortBy);
+  if (filters?.search) params.append('search', filters.search);
+  if (filters?.page) params.append('page', filters.page.toString());
+  if (filters?.perPage) params.append('per_page', filters.perPage.toString());
+
+  const url = `/api/v1/admin/analytics/player-leaderboard?${params.toString()}`;
+  const { data, error, mutate } = useSWR(url, fetcher, {
+    revalidateOnFocus: false,
+    refreshInterval: 0,
+  });
+
+  return {
+    leaderboard: data,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
+/**
+ * Player Detail Hook
+ */
+export interface PlayerDetailFilters {
+  days?: number;
+  languageId?: string;
+  gameKey?: string;
+}
+
+export function usePlayerDetail(userId: string | null, filters?: PlayerDetailFilters) {
+  const params = new URLSearchParams();
+  if (filters?.days) params.append('days', filters.days.toString());
+  if (filters?.languageId) params.append('language_id', filters.languageId);
+  if (filters?.gameKey) params.append('game_key', filters.gameKey);
+
+  const url = userId ? `/api/v1/admin/analytics/player-detail/${userId}?${params.toString()}` : null;
+  const { data, error, mutate } = useSWR(url, fetcher, {
+    revalidateOnFocus: false,
+    refreshInterval: 0,
+  });
+
+  return {
+    player: data,
+    isLoading: userId ? (!error && !data) : false,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
+/**
+ * Available Games Hook (for filter dropdowns)
+ */
+export function useAvailableGames() {
+  const { data, error, mutate } = useSWR(
+    '/api/v1/admin/analytics/available-games',
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      refreshInterval: 0,
+    }
+  );
+
+  return {
+    games: data?.games || [],
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
+}

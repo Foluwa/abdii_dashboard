@@ -64,6 +64,15 @@ const navItems: NavItem[] = [
     path: "/subscriptions",
   },
   {
+    icon: <PieChartIcon />,
+    name: "Analytics",
+    permission: "users:read", // Admin only
+    subItems: [
+      { name: "Game Analytics", path: "/analytics" },
+      { name: "Player Analytics", path: "/analytics/players" },
+    ],
+  },
+  {
     name: "Content",
     icon: <ListIcon />,
     permission: "content:read", // Admin & Manager

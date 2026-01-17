@@ -2,12 +2,14 @@
 
 import React, { useState } from "react";
 import { useAppSettings } from "@/hooks/useApi";
+import { useAuth } from "@/context/AuthContext";
 import { apiClient } from "@/lib/api";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Alert from "@/components/ui/alert/SimpleAlert";
 import { AppSetting } from "@/types/api";
 
 export default function AppConfigPage() {
+  const { user, isAdmin } = useAuth();
   const { settings, isLoading, isError, refresh } = useAppSettings();
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>("");
@@ -87,11 +89,34 @@ export default function AppConfigPage() {
   }
 
   if (isError) {
+    const errorStatus = isError?.response?.status;
+    let errorMessage: string;
+    
+    if (errorStatus === 401) {
+      errorMessage = "Your session has expired. Please log in again.";
+    } else if (errorStatus === 403) {
+      errorMessage = `You don't have permission to view app settings. Your role: ${user?.role || 'unknown'}. Admin role required.`;
+    } else {
+      errorMessage = "Failed to load app settings. Please check your API connection.";
+    }
+    
     return (
       <div className="space-y-6">
         <PageBreadCrumb pageTitle="App Settings" />
         <Alert variant="error">
-          Failed to load app settings. Please check your API connection.
+          {errorMessage}
+        </Alert>
+      </div>
+    );
+  }
+
+  // Show warning if user is not admin but somehow got here
+  if (!isAdmin) {
+    return (
+      <div className="space-y-6">
+        <PageBreadCrumb pageTitle="App Settings" />
+        <Alert variant="warning">
+          This page requires admin privileges. Your current role: {user?.role || 'unknown'}
         </Alert>
       </div>
     );
