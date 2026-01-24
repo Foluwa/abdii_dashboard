@@ -8,12 +8,24 @@ import type { NextRequest } from 'next/server';
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Public routes that don't require authentication
+  const publicRoutes = ['/', '/signin', '/signup'];
+  const isPublicRoute = publicRoutes.includes(pathname);
+
   // Check if user data exists in cookies (set by client after login)
   const userCookie = request.cookies.get('user')?.value;
   const isAuthenticated = !!userCookie;
 
-  // If authenticated and trying to access root login page, redirect to dashboard
-  if (pathname === '/' && isAuthenticated) {
+  console.log('🛡️ MIDDLEWARE:', {
+    pathname,
+    isPublicRoute,
+    isAuthenticated,
+    hasCookie: !!userCookie
+  });
+
+  // If authenticated and trying to access login/signin page, redirect to dashboard
+  if (isAuthenticated && (pathname === '/' || pathname === '/signin')) {
+    console.log('✅ Authenticated user on login page, redirecting to dashboard');
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 

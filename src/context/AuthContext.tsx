@@ -115,19 +115,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    */
   const logout = async () => {
     try {
+      console.log('🚪 Logging out...');
+      
+      // Clear state first to prevent any race conditions
+      setUser(null);
+      
       // Clear all session storage (more thorough than removing individual items)
       sessionStorage.clear();
 
       // Clear client-side cookie
       document.cookie = 'user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
 
-      setUser(null);
-
-      // Redirect to login
-      router.push('/');
+      console.log('✅ Logout complete, redirecting to login');
+      
+      // Force a hard redirect to login page (clears all state)
+      window.location.href = '/';
     } catch (error) {
       console.error('Logout error:', error);
       // Force redirect even on error
+      sessionStorage.clear();
+      document.cookie = 'user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
       window.location.href = '/';
     }
   };
@@ -198,8 +205,10 @@ export const useRequireAuth = (requiredPermission?: string) => {
     if (!isAuthenticated && !hasToken) {
       console.log('❌ Not authenticated, redirecting to login');
       setShouldRender(false);
-      // Use replace instead of push to prevent back button issues
-      router.replace('/');
+      // Prevent redirect loops - only redirect once
+      if (window.location.pathname !== '/') {
+        router.replace('/');
+      }
       return;
     }
 
@@ -207,11 +216,14 @@ export const useRequireAuth = (requiredPermission?: string) => {
     if (requiredPermission && user && !checkPermission(requiredPermission)) {
       console.log('⛔ Permission denied, redirecting to dashboard');
       setShouldRender(false);
-      router.replace('/dashboard');
+      if (window.location.pathname !== '/dashboard') {
+        router.replace('/dashboard');
+      }
       return;
     }
 
     // If we get here, user is authenticated
+    console.log('✅ Authentication check passed, rendering content');
     setShouldRender(true);
   }, [isAuthenticated, isLoading, requiredPermission, checkPermission, router, user]);
 

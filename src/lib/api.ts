@@ -146,6 +146,7 @@ apiClient.interceptors.response.use(
         console.log('Refresh token exists:', !!refreshToken);
         
         if (!refreshToken) {
+          console.error('❌ No refresh token available, cannot refresh');
           throw new Error('No refresh token available');
         }
 
@@ -174,13 +175,14 @@ apiClient.interceptors.response.use(
         processQueue(refreshError as Error, null);
         isRefreshing = false;
 
+        // Clear auth data immediately to prevent further refresh attempts
+        sessionStorage.clear();
+        document.cookie = 'user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        
         // Only redirect if we're not already on the login page
-        if (window.location.pathname !== '/') {
+        const currentPath = window.location.pathname;
+        if (currentPath !== '/' && currentPath !== '/signin') {
           console.error('Token refresh failed, redirecting to login');
-          // Clear auth data and redirect to login
-          sessionStorage.clear();
-          document.cookie = 'user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-          
           // Use setTimeout to avoid affecting current request flow
           setTimeout(() => {
             window.location.href = '/';
