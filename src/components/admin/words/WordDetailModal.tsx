@@ -46,7 +46,7 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
     if (!editedLemma.trim()) return;
     
     try {
-      await apiClient.patch(`/admin/content/words/${wordId}`, { lemma: editedLemma });
+      await apiClient.patch(`/api/v1/admin/content/words/${wordId}`, { lemma: editedLemma });
       showToast('Lemma updated successfully', 'success');
       setIsEditingLemma(false);
       mutate();
@@ -60,7 +60,7 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
     if (!editedGloss.trim()) return;
     
     try {
-      await apiClient.patch(`/admin/content/glosses/${glossId}`, { definition: editedGloss });
+      await apiClient.patch(`/api/v1/admin/content/glosses/${glossId}`, { definition: editedGloss });
       showToast('Definition updated successfully', 'success');
       setEditingGlossId(null);
       mutate();
@@ -72,7 +72,7 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
 
   const handleUpdateExample = async (exampleId: string) => {
     try {
-      await apiClient.patch(`/admin/content/examples/${exampleId}`, {
+      await apiClient.patch(`/api/v1/admin/content/examples/${exampleId}`, {
         example_yoruba: editedExampleYoruba,
         example_english: editedExampleEnglish
       });
