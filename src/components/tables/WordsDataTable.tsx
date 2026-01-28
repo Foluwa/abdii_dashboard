@@ -7,7 +7,7 @@ import {
   TableRow,
 } from "../ui/table";
 import Badge from "../ui/badge/Badge";
-import { FiTrash2, FiEdit, FiVolume2, FiSearch, FiFilter } from "react-icons/fi";
+import { FiTrash2, FiEdit, FiVolume2, FiSearch, FiFilter, FiEye } from "react-icons/fi";
 import { ConfirmationModal } from "../ui/modal/ConfirmationModal";
 import { AudioWaveform } from "@/components/ui/audio/AudioWaveform";
 
@@ -38,6 +38,7 @@ interface WordsDataTableProps {
   onSelectWord?: (wordId: string) => void;
   onSelectAll?: () => void;
   onRegenerateAudio?: (wordId: string) => void;
+  onViewDetails?: (wordId: string) => void;
 }
 
 export default function WordsDataTable({
@@ -51,6 +52,7 @@ export default function WordsDataTable({
   onSelectWord,
   onSelectAll,
   onRegenerateAudio,
+  onViewDetails,
 }: WordsDataTableProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; word: string } | null>(null);
   const [regeneratingAudio, setRegeneratingAudio] = useState<string | null>(null);
@@ -267,6 +269,16 @@ export default function WordsDataTable({
                     {/* Actions */}
                     <TableCell className="px-4 py-3 text-end">
                       <div className="flex items-center justify-end gap-2">
+                        {onViewDetails && (
+                          <button
+                            onClick={() => onViewDetails(word.id)}
+                            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                            title="View details"
+                          >
+                            <FiEye className="h-3.5 w-3.5" />
+                            View
+                          </button>
+                        )}
                         {onRegenerateAudio && (
                           <button
                             onClick={() => {

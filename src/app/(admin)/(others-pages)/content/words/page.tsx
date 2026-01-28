@@ -11,6 +11,7 @@ import { StyledSelect } from "@/components/ui/form/StyledSelect";
 import WordsDataTable from "@/components/tables/WordsDataTable";
 import { Modal } from "@/components/ui/modal";
 import { RegenerateAudioModal } from "@/components/modals/RegenerateAudioModal";
+import WordDetailModal from "@/components/admin/words/WordDetailModal";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { FiPlus, FiGlobe, FiTrash2, FiVolume2, FiFilter, FiX, FiChevronDown, FiChevronUp } from "react-icons/fi";
 
@@ -49,6 +50,7 @@ export default function WordsPage() {
   const [uploadingAudio, setUploadingAudio] = useState(false);
   const [showRegenerateModal, setShowRegenerateModal] = useState(false);
   const [regeneratingWord, setRegeneratingWord] = useState<any | null>(null);
+  const [viewDetailWordId, setViewDetailWordId] = useState<string | null>(null);
 
   // Advanced filter state
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -348,9 +350,10 @@ export default function WordsPage() {
 
     setIsRegenerating(true);
     try {
-      // Backend endpoint for bulk audio regeneration (to be implemented)
-      await apiClient.post('/api/v1/admin/content/words/bulk-regenerate-audio', {
-        word_ids: selectedWords
+      // Use the new bulk audio regeneration endpoint
+      await apiClient.post('/api/v1/admin/content/words/bulk/regenerate-audio', {
+        word_ids: selectedWords,
+        preview_only: false
       });
       toast.success(`Audio regeneration started for ${selectedWords.length} word(s)`);
       setSelectedWords([]);
@@ -1021,6 +1024,7 @@ export default function WordsPage() {
         onEdit={openEditModal}
         onDelete={handleDelete}
         onRegenerateAudio={handleRegenerateAudio}
+        onViewDetails={(wordId) => setViewDetailWordId(wordId)}
         onSearch={(query) => {
           setSearch(query);
           setPage(1);
@@ -1377,6 +1381,15 @@ export default function WordsPage() {
           setTimeout(() => refresh(), 2000);
         }}
       />
+
+      {/* Word Detail Modal */}
+      {viewDetailWordId && (
+        <WordDetailModal
+          wordId={viewDetailWordId}
+          onClose={() => setViewDetailWordId(null)}
+          onUpdate={() => refresh()}
+        />
+      )}
     </div>
   );
 }

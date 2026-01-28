@@ -24,9 +24,18 @@ export function middleware(request: NextRequest) {
   });
 
   // If authenticated and trying to access login/signin page, redirect to dashboard
+  // BUT: Add check to prevent redirect if we just came from dashboard (prevent loop)
   if (isAuthenticated && (pathname === '/' || pathname === '/signin')) {
-    console.log('✅ Authenticated user on login page, redirecting to dashboard');
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    const referer = request.headers.get('referer');
+    const isDashboardReferer = referer?.includes('/dashboard');
+    
+    // Only redirect if NOT coming from dashboard (prevents loop)
+    if (!isDashboardReferer) {
+      console.log('✅ Authenticated user on login page, redirecting to dashboard');
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    } else {
+      console.log('⚠️ Skipping redirect - came from dashboard (prevent loop)');
+    }
   }
 
   // Allow all other requests to proceed

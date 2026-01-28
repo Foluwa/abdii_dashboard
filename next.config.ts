@@ -35,14 +35,16 @@ const nextConfig: NextConfig = {
     return config;
   },
     
-    turbopack: {
-      rules: {
-        '*.svg': {
-          loaders: ['@svgr/webpack'],
-          as: '*.js',
-        },
+  turbopack: {
+    // Explicitly set root to this directory to prevent workspace root confusion
+    root: __dirname,
+    rules: {
+      '*.svg': {
+        loaders: ['@svgr/webpack'],
+        as: '*.js',
       },
     },
+  },
   
 };
 

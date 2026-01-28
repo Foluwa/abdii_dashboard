@@ -152,14 +152,23 @@ apiClient.interceptors.response.use(
 
         // Call refresh endpoint (same for admin and regular users)
         console.log('📡 Calling refresh endpoint...');
-        const refreshResponse = await apiClient.post<{ access_token: string; refresh_token: string }>(
+        const refreshResponse = await apiClient.post<{ 
+          access_token: string; 
+          refresh_token: string;
+          expires_in: number;
+        }>(
           '/api/v1/auth/refresh',
           { refresh_token: refreshToken }
         );
 
         console.log('✅ Token refresh successful');
+        
+        // Calculate new expiry time
+        const expiryTime = Date.now() + ((refreshResponse.data.expires_in || 3600) * 1000);
+        
         // Store new tokens in sessionStorage (clears on browser/tab close)
         sessionStorage.setItem('access_token', refreshResponse.data.access_token);
+        sessionStorage.setItem('token_expiry', expiryTime.toString());
         if (refreshResponse.data.refresh_token) {
           sessionStorage.setItem('refresh_token', refreshResponse.data.refresh_token);
         }

@@ -45,6 +45,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         const storedUser = sessionStorage.getItem('user');
         const accessToken = sessionStorage.getItem('access_token');
+        const tokenExpiry = sessionStorage.getItem('token_expiry');
+        
+        // Check if token has expired
+        if (tokenExpiry && Date.now() > parseInt(tokenExpiry)) {
+          console.log('⏰ Token expired, clearing session');
+          sessionStorage.clear();
+          document.cookie = 'user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+          setIsLoading(false);
+          return;
+        }
         
         // Validate both user data and token exist
         if (storedUser && accessToken) {
@@ -65,6 +75,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     loadUser();
+
+    // Set up a periodic check for token expiry (every minute)
+    const expiryCheckInterval = setInterval(() => {
+      const tokenExpiry = sessionStorage.getItem('token_expiry');
+      if (tokenExpiry && Date.now() > parseInt(tokenExpiry)) {
+        console.log('⏰ Token expired during session, logging out');
+        logout();
+      }
+    }, 60000); // Check every minute
+
+    return () => clearInterval(expiryCheckInterval);
   }, []);
 
   /**
@@ -83,10 +104,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.log('Access token length:', access_token?.length);
       console.log('User role:', userData.role);
 
+      // Calculate token expiry time (expires_in is in seconds)
+      const expiryTime = Date.now() + (response.data.expires_in * 1000);
+
       // Store tokens FIRST in sessionStorage (more secure - clears on browser/tab close)
       sessionStorage.setItem('access_token', access_token);
       sessionStorage.setItem('refresh_token', refresh_token);
       sessionStorage.setItem('user', JSON.stringify(userData));
+      sessionStorage.setItem('token_expiry', expiryTime.toString());
 
       // Set a client-side cookie for middleware detection (session cookie)
       document.cookie = `user=${encodeURIComponent(JSON.stringify(userData))}; path=/; SameSite=Strict; Secure`;
@@ -141,13 +166,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   /**
    * Check if user has specific permission
+   * Memoized to prevent unnecessary re-renders
    */
-  const checkPermission = (permission: string): boolean => {
+  const checkPermission = React.useCallback((permission: string): boolean => {
     if (!user) return false;
     return hasPermission(user.role, permission);
-  };
+  }, [user]);
 
-  const value: AuthContextType = {
+  const value: AuthContextType = React.useMemo(() => ({
     user,
     isAuthenticated: !!user,
     isLoading,
@@ -156,7 +182,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     checkPermission,
     isAdmin: user?.role === 'admin',
     isManager: user?.role === 'manager',
-  };
+  }), [user, isLoading, login, logout, checkPermission]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
@@ -180,20 +206,28 @@ export const useRequireAuth = (requiredPermission?: string) => {
   const { isAuthenticated, isLoading, checkPermission, user } = useAuth();
   const router = useRouter();
   const [shouldRender, setShouldRender] = React.useState(false);
+  const hasCheckedRef = React.useRef(false);
 
   useEffect(() => {
+    // Skip if we've already completed auth check
+    if (hasCheckedRef.current && shouldRender) {
+      return;
+    }
+
     console.log('🔒 ROUTE PROTECTION CHECK:', {
       isLoading,
       isAuthenticated,
       hasToken: !!sessionStorage.getItem('access_token'),
-      currentPath: window.location.pathname,
+      currentPath: typeof window !== 'undefined' ? window.location.pathname : 'SSR',
       requiredPermission,
-      userRole: user?.role
+      userRole: user?.role,
+      hasChecked: hasCheckedRef.current,
+      shouldRender
     });
 
-    // Don't redirect while still loading
+    // Don't do anything while still loading
     if (isLoading) {
-      console.log('⏳ Still loading auth state, skipping redirect check');
+      console.log('⏳ Still loading auth state, waiting...');
       setShouldRender(false);
       return;
     }
@@ -206,8 +240,13 @@ export const useRequireAuth = (requiredPermission?: string) => {
       console.log('❌ Not authenticated, redirecting to login');
       setShouldRender(false);
       // Prevent redirect loops - only redirect once
-      if (window.location.pathname !== '/') {
-        router.replace('/');
+      if (typeof window !== 'undefined' && 
+          !hasCheckedRef.current && 
+          window.location.pathname !== '/' && 
+          window.location.pathname !== '/signin') {
+        console.log('🔄 Performing hard redirect to login page');
+        hasCheckedRef.current = true;
+        window.location.href = '/';
       }
       return;
     }
@@ -216,7 +255,10 @@ export const useRequireAuth = (requiredPermission?: string) => {
     if (requiredPermission && user && !checkPermission(requiredPermission)) {
       console.log('⛔ Permission denied, redirecting to dashboard');
       setShouldRender(false);
-      if (window.location.pathname !== '/dashboard') {
+      if (typeof window !== 'undefined' && 
+          !hasCheckedRef.current && 
+          window.location.pathname !== '/dashboard') {
+        hasCheckedRef.current = true;
         router.replace('/dashboard');
       }
       return;
@@ -224,8 +266,9 @@ export const useRequireAuth = (requiredPermission?: string) => {
 
     // If we get here, user is authenticated
     console.log('✅ Authentication check passed, rendering content');
+    hasCheckedRef.current = true;
     setShouldRender(true);
-  }, [isAuthenticated, isLoading, requiredPermission, checkPermission, router, user]);
+  }, [isAuthenticated, isLoading]); // Minimal dependencies - only primitives
 
   return { isLoading: isLoading || !shouldRender };
 };
