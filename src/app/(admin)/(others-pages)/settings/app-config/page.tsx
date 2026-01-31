@@ -162,7 +162,7 @@ export default function AppConfigPage() {
           {categories.map((cat) => (
             <button
               key={cat}
-              onClick={() => setFilterCategory(cat)}
+              onClick={() => setFilterCategory(cat!)}
               className={`px-3 py-1 text-sm rounded-full transition-colors ${
                 filterCategory === cat
                   ? "bg-brand-600 text-white"
@@ -282,7 +282,7 @@ export default function AppConfigPage() {
                 )}
 
                 <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-                  Last updated: {new Date(setting.updated_at).toLocaleString()}
+                  Last updated: {setting.updated_at ? new Date(setting.updated_at).toLocaleString() : 'Unknown'}
                 </div>
               </div>
             </div>
