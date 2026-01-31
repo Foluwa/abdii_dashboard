@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { usePlayerLeaderboard, usePlayerDetail, useLanguages, useAvailableGames } from '@/hooks/useApi';
 import PageBreadCrumb from '@/components/common/PageBreadCrumb';
 import Alert from '@/components/ui/alert/SimpleAlert';
+import { cleanSvgForDisplay, getInitials as getSvgInitials, getAvatarColor as getSvgAvatarColor } from '@/lib/svg-utils';
 
 type TimeRange = 'week' | 'month' | 'all';
 type SortBy = 'score' | 'sessions' | 'accuracy' | 'time' | 'xp';
@@ -317,8 +318,8 @@ export default function PlayerAnalyticsPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
-                            {player.avatar_url ? (
-                              <img src={player.avatar_url} alt="" className="h-10 w-10 rounded-full" />
+                            {player.avatar_url && cleanSvgForDisplay(player.avatar_url) ? (
+                              <img src={cleanSvgForDisplay(player.avatar_url)!} alt="" className="h-10 w-10 rounded-full" />
                             ) : (
                               <div className={`h-10 w-10 rounded-full ${getAvatarColor(player.user_id)} flex items-center justify-center text-white font-semibold`}>
                                 {getInitials(player.display_name)}
@@ -414,8 +415,8 @@ export default function PlayerAnalyticsPage() {
               <div className="bg-white border border-gray-200 rounded-lg dark:bg-gray-900 dark:border-gray-800 p-6">
                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
-                    {player.avatar_url ? (
-                      <img src={player.avatar_url} alt="" className="h-20 w-20 rounded-full" />
+                    {player.avatar_url && cleanSvgForDisplay(player.avatar_url) ? (
+                      <img src={cleanSvgForDisplay(player.avatar_url)!} alt="" className="h-20 w-20 rounded-full" />
                     ) : (
                       <div className={`h-20 w-20 rounded-full ${getAvatarColor(player.user_id)} flex items-center justify-center text-white text-2xl font-semibold`}>
                         {getInitials(player.display_name)}

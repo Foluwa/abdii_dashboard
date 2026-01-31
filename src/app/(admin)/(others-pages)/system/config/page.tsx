@@ -6,6 +6,7 @@ import { apiClient } from "@/lib/api";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Alert from "@/components/ui/alert/SimpleAlert";
 import StatusBadge from "@/components/admin/StatusBadge";
+import { useToast } from "@/contexts/ToastContext";
 
 interface ConfigItem {
   key: string;
@@ -21,11 +22,11 @@ interface ConfigItem {
 }
 
 export default function ConfigPage() {
+  const toast = useToast();
   const { config, isLoading, isError, refresh } = useConfig();
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<any>("");
   const [editDescription, setEditDescription] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -45,7 +46,6 @@ export default function ConfigPage() {
     setEditingKey(item.key);
     setEditValue(getActualValue(item));
     setEditDescription(item.description || "");
-    setSuccessMessage("");
     setErrorMessage("");
   };
 
@@ -81,10 +81,9 @@ export default function ConfigPage() {
       }
 
       await apiClient.put(`/api/v1/admin/configs/${key}`, payload);
-      setSuccessMessage(`✓ Configuration "${key}" updated successfully`);
+      toast.success(`Configuration "${key}" updated successfully`);
       setEditingKey(null);
       refresh();
-      setTimeout(() => setSuccessMessage(""), 3000);
     } catch (error: any) {
       setErrorMessage(error.response?.data?.detail || "Failed to update configuration");
     } finally {
@@ -97,9 +96,8 @@ export default function ConfigPage() {
       await apiClient.patch(`/api/v1/admin/configs/${key}/toggle`, {
         is_active: !currentStatus
       });
-      setSuccessMessage(`✓ Configuration "${key}" ${!currentStatus ? "enabled" : "disabled"}`);
+      toast.success(`Configuration "${key}" ${!currentStatus ? "enabled" : "disabled"}`);
       refresh();
-      setTimeout(() => setSuccessMessage(""), 3000);
     } catch (error: any) {
       setErrorMessage(error.response?.data?.detail || "Failed to toggle configuration");
     }
@@ -111,9 +109,8 @@ export default function ConfigPage() {
     }
     try {
       await apiClient.delete(`/api/v1/admin/configs/${key}`);
-      setSuccessMessage(`✓ Configuration "${key}" deleted`);
+      toast.success(`Configuration "${key}" deleted`);
       refresh();
-      setTimeout(() => setSuccessMessage(""), 3000);
     } catch (error: any) {
       setErrorMessage(error.response?.data?.detail || "Failed to delete configuration");
     }
@@ -168,7 +165,6 @@ export default function ConfigPage() {
           </button>
         </div>
 
-        {successMessage && <Alert variant="success">{successMessage}</Alert>}
         {errorMessage && <Alert variant="error">{errorMessage}</Alert>}
 
         {categories.length > 0 && (

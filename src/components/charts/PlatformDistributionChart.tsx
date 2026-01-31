@@ -13,17 +13,17 @@ const ReactApexChart = dynamic(() => import("react-apexcharts"), {
 
 /**
  * Platform Distribution Chart
- * Uses users.provider field (device/google/apple) from the backend analytics API
+ * Uses devices table to show actual OS platform (iOS/Android/unknown)
  */
 export default function PlatformDistributionChart() {
   const { distribution, total, isLoading, isError } = usePlatformDistribution();
   const [isOpen, setIsOpen] = useState(false);
 
-  // Map provider names to display labels and colors
-  const providerConfig: Record<string, { label: string; color: string }> = {
-    device: { label: "Device ID", color: "#94a3b8" },
-    google: { label: "Google", color: "#4285f4" },
-    apple: { label: "Apple", color: "#000000" },
+  // Map platform names to display labels and colors
+  const platformConfig: Record<string, { label: string; color: string }> = {
+    ios: { label: "iOS", color: "#000000" },
+    android: { label: "Android", color: "#3DDC84" },
+    unknown: { label: "Unknown", color: "#94a3b8" },
   };
 
   // Build chart data from API response
@@ -31,9 +31,10 @@ export default function PlatformDistributionChart() {
   const series: number[] = [];
   const colors: string[] = [];
 
-  distribution.forEach((item: { provider: string; count: number }) => {
-    const config = providerConfig[item.provider] || { 
-      label: item.provider, 
+  distribution.forEach((item: { platform: string; count: number }) => {
+    const platformKey = item.platform?.toLowerCase() || 'unknown';
+    const config = platformConfig[platformKey] || { 
+      label: item.platform, 
       color: "#64748b" 
     };
     labels.push(config.label);
@@ -131,7 +132,7 @@ export default function PlatformDistributionChart() {
             Platform Distribution
           </h3>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Users by authentication provider
+            Users by device operating system
           </p>
         </div>
 
@@ -168,14 +169,15 @@ export default function PlatformDistributionChart() {
           />
           
           <div className="grid grid-cols-3 gap-3 mt-6 w-full">
-            {distribution.map((item: { provider: string; count: number; percentage: number }) => {
-              const config = providerConfig[item.provider] || {
-                label: item.provider,
+            {distribution.map((item: { platform: string; count: number; percentage: number }) => {
+              const platformKey = item.platform?.toLowerCase() || 'unknown';
+              const config = platformConfig[platformKey] || {
+                label: item.platform,
                 color: "#64748b",
               };
               return (
                 <div
-                  key={item.provider}
+                  key={item.platform}
                   className="p-3 bg-gray-50 rounded-lg dark:bg-gray-800"
                 >
                   <div className="flex items-center gap-2">

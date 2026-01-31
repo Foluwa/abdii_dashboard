@@ -401,18 +401,18 @@ export function useGames(filters?: { language_id?: number; game_type?: string; p
 
 /**
  * Platform Distribution Hook
- * Returns users grouped by provider (device/google/apple)
+ * Returns users grouped by actual device platform (iOS/Android/unknown)
  */
 export function usePlatformDistribution() {
   const { data, error, mutate } = useSWR(
-    '/api/v1/admin/analytics/platform-distribution',
+    '/api/v1/devices/admin/platform-distribution',
     fetcher,
     { revalidateOnFocus: false }
   );
 
   return {
-    distribution: data?.data || [],
-    total: data?.total || 0,
+    distribution: data?.users_by_latest_platform || [],
+    total: data?.total_users_with_devices || 0,
     isLoading: !error && !data,
     isError: error,
     refresh: mutate,

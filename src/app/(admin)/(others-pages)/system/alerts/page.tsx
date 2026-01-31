@@ -127,9 +127,9 @@ export default function AlertsPage() {
 
       {/* Alerts List */}
       <div className="bg-white border border-gray-200 rounded-lg dark:bg-gray-900 dark:border-gray-800">
-        {alerts && alerts.items.length > 0 ? (
+        {alerts && alerts.length > 0 ? (
           <div className="divide-y divide-gray-200 dark:divide-gray-800">
-            {alerts.items.map((alert: any) => (
+            {alerts.map((alert: any) => (
               <div key={alert.id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">

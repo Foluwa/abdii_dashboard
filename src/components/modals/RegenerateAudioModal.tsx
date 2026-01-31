@@ -87,7 +87,7 @@ export function RegenerateAudioModal({ isOpen, onClose, word, onSuccess }: Regen
 
     setIsLoading(true);
     try {
-      await apiClient.post(`/api/v1/admin/content/words/${word.id}/regenerate-audio`, {
+      await apiClient.post(`/api/v1/admin/content/words/single/${word.id}/regenerate-audio`, {
         voice_id: selectedVoiceId,
         text_override: textOverride !== word.lemma ? textOverride : null
       });

@@ -14,6 +14,20 @@ export interface SystemStatus {
 
 export interface ConfigEntry {
   key: string;
+  value_type: string;
+  value_int: number | null;
+  value_float: number | null;
+  value_text: string | null;
+  value_bool: boolean | null;
+  description: string | null;
+  category: string | null;
+  is_active: boolean;
+  updated_at: string | null;
+}
+
+// Legacy config format (alert_config table)
+export interface LegacyConfigEntry {
+  key: string;
   value: string;
   value_type: string;
   description: string | null;
@@ -86,6 +100,10 @@ export interface UserListItem {
   updated_at: string;
   last_login?: string;
   is_active?: boolean;
+  device_platform?: string | null;
+  device_name?: string | null;
+  device_app_version?: string | null;
+  device_build_number?: string | null;
 }
 
 export interface UserDetail extends UserListItem {

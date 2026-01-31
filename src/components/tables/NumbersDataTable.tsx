@@ -82,7 +82,9 @@ const NumbersDataTable: React.FC<Props> = ({
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+    <>
+    {/* Desktop Table View */}
+    <div className="hidden lg:block overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
       <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
         <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-800 dark:text-gray-400">
           <tr>
@@ -207,6 +209,97 @@ const NumbersDataTable: React.FC<Props> = ({
         </tbody>
       </table>
     </div>
+
+    {/* Mobile Grid View */}
+    <div className="lg:hidden grid grid-cols-1 gap-4">
+      {numbers.map((number) => (
+        <div
+          key={number.id}
+          className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4"
+        >
+          {/* Number Value */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <FiHash className="text-gray-400" size={20} />
+              <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                {number.number_value}
+              </span>
+            </div>
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getDifficultyBadge(number.difficulty_level)}`}>
+              Level {number.difficulty_level}
+            </span>
+          </div>
+
+          {/* Word */}
+          <div className="mb-3">
+            <div className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+              {number.word}
+            </div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              {number.word_normalized}
+            </div>
+          </div>
+
+          {/* Badges */}
+          <div className="flex flex-wrap gap-2 mb-3">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-100 text-brand-800 dark:bg-brand-900 dark:text-brand-300">
+              {getLanguageName(number.language_id)}
+            </span>
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300">
+              {number.number_type}
+            </span>
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+              number.number_system === 'vigesimal' 
+                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
+                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+            }`}>
+              {number.number_system}
+            </span>
+            {number.is_compound ? (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300">
+                Compound
+              </span>
+            ) : (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                Simple
+              </span>
+            )}
+          </div>
+
+          {/* Audio */}
+          {((number.has_audio && number.audio_url) || (number.audio && number.audio.length > 0)) && (
+            <div className="mb-3">
+              <AudioWaveform
+                src={number.audio_url || number.audio![0].s3_bucket_key}
+                height={40}
+                waveColor="#94a3b8"
+                progressColor="#3b82f6"
+                cursorColor="#1d4ed8"
+              />
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 border-t border-gray-200 dark:border-gray-700 pt-3">
+            <button
+              onClick={() => onEdit(number)}
+              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+            >
+              <FiEdit className="w-4 h-4" />
+              Edit
+            </button>
+            <button
+              onClick={() => onDelete(number.id)}
+              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+            >
+              <FiTrash2 className="w-4 h-4" />
+              Delete
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+    </>
   );
 };
 

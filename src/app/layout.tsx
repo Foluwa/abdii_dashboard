@@ -20,7 +20,7 @@ export default function RootLayout({
       <head>
         <meta charSet="UTF-8" />
       </head>
-      <body className={`${outfit.className} dark:bg-gray-900`}>
+      <body className={`${outfit.className} dark:bg-gray-900`} suppressHydrationWarning>
         <ThemeProvider>
           <AuthProvider>
             <ToastProvider>

@@ -88,7 +88,9 @@ export default function DataTable<T extends Record<string, unknown>>({
   }
 
   return (
-    <div className="overflow-hidden border border-gray-200 rounded-lg dark:border-gray-800">
+    <>
+    {/* Desktop Table View */}
+    <div className="hidden lg:block overflow-hidden border border-gray-200 rounded-lg dark:border-gray-800">
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
           <thead className="bg-gray-50 dark:bg-gray-800/50">
@@ -163,5 +165,55 @@ export default function DataTable<T extends Record<string, unknown>>({
         </table>
       </div>
     </div>
+
+    {/* Mobile Grid View */}
+    <div className="lg:hidden grid grid-cols-1 gap-4">
+      {loading ? (
+        <div className="flex items-center justify-center py-12 rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+        </div>
+      ) : data.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400 rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+          <svg className="w-16 h-16 mb-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <p className="text-lg font-medium">{emptyMessage}</p>
+        </div>
+      ) : (
+        data.map((item) => (
+          <div
+            key={keyExtractor(item)}
+            onClick={() => onRowClick?.(item)}
+            className={`bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4 ${
+              onRowClick ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50' : ''
+            }`}
+          >
+            {columns.map((column) => {
+              const value = item[column.key as keyof T];
+              return (
+                <div key={String(column.key)} className="mb-3 last:mb-0">
+                  <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">
+                    {column.label}
+                  </div>
+                  <div className="text-sm text-gray-900 dark:text-gray-100">
+                    {column.render ? (
+                      column.render(value, item)
+                    ) : (
+                      <span>{value !== null && value !== undefined ? String(value) : '-'}</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {actions && (
+              <div className="flex items-center gap-2 border-t border-gray-200 dark:border-gray-800 pt-3 mt-3">
+                {actions(item)}
+              </div>
+            )}
+          </div>
+        ))
+      )}
+    </div>
+    </>
   );
 }

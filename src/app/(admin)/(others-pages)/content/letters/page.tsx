@@ -10,7 +10,6 @@ import Alert from "@/components/ui/alert/Alert";
 import { StyledSelect } from "@/components/ui/form/StyledSelect";
 import { ConfirmationModal } from "@/components/ui/modal/ConfirmationModal";
 import { AudioWaveform } from "@/components/ui/audio/AudioWaveform";
-import { FiGrid, FiList } from "react-icons/fi";
 
 interface Letter {
   id: string;
@@ -33,7 +32,6 @@ export default function LettersPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingLetter, setEditingLetter] = useState<Letter | null>(null);
-  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; glyph: string } | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioPreview, setAudioPreview] = useState<string | null>(null);
@@ -219,40 +217,13 @@ export default function LettersPage() {
             Manage alphabet letters for each language
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          {/* View Toggle */}
-          <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
-            <button
-              onClick={() => setViewMode("grid")}
-              className={`p-2 rounded-md transition-colors ${
-                viewMode === "grid"
-                  ? "bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm"
-                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-              }`}
-              title="Grid View"
-            >
-              <FiGrid className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => setViewMode("table")}
-              className={`p-2 rounded-md transition-colors ${
-                viewMode === "table"
-                  ? "bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm"
-                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-              }`}
-              title="Table View"
-            >
-              <FiList className="w-5 h-5" />
-            </button>
-          </div>
-          <button
-            onClick={openCreateModal}
-            disabled={!selectedLanguage}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            + Add Letter
-          </button>
-        </div>
+        <button
+          onClick={openCreateModal}
+          disabled={!selectedLanguage}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          + Add Letter
+        </button>
       </div>
 
       {/* Language Selector */}
@@ -291,8 +262,8 @@ export default function LettersPage() {
         </div>
       )}
 
-      {!loading && letters.length > 0 && viewMode === "grid" && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
+      {!loading && letters.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4 lg:hidden">
           {letters.map((letter) => (
             <div
               key={letter.id}
@@ -328,9 +299,9 @@ export default function LettersPage() {
         </div>
       )}
 
-      {/* Table View */}
-      {!loading && letters.length > 0 && viewMode === "table" && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+      {/* Table View - Desktop Only */}
+      {!loading && letters.length > 0 && (
+        <div className="hidden lg:block bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">

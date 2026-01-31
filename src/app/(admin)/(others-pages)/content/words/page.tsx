@@ -10,6 +10,7 @@ import Alert from "@/components/ui/alert/SimpleAlert";
 import { StyledSelect } from "@/components/ui/form/StyledSelect";
 import WordsDataTable from "@/components/tables/WordsDataTable";
 import { Modal } from "@/components/ui/modal";
+import { ConfirmationModal } from "@/components/ui/modal/ConfirmationModal";
 import { RegenerateAudioModal } from "@/components/modals/RegenerateAudioModal";
 import WordDetailModal from "@/components/admin/words/WordDetailModal";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
@@ -51,6 +52,10 @@ export default function WordsPage() {
   const [showRegenerateModal, setShowRegenerateModal] = useState(false);
   const [regeneratingWord, setRegeneratingWord] = useState<any | null>(null);
   const [viewDetailWordId, setViewDetailWordId] = useState<string | null>(null);
+  
+  // Confirmation modal states
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
 
   // Advanced filter state
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -323,9 +328,10 @@ export default function WordsPage() {
   const handleBulkDelete = async () => {
     if (selectedWords.length === 0) return;
     
-    const confirmed = window.confirm(`Are you sure you want to delete ${selectedWords.length} word(s)?`);
-    if (!confirmed) return;
+    setShowDeleteConfirm(true);
+  };
 
+  const confirmBulkDelete = async () => {
     setIsDeleting(true);
     try {
       // Backend endpoint for bulk delete (to be implemented)
@@ -334,6 +340,7 @@ export default function WordsPage() {
       });
       toast.success(`Successfully deleted ${selectedWords.length} word(s)`);
       setSelectedWords([]);
+      setShowDeleteConfirm(false);
       refresh();
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to delete words');
@@ -345,9 +352,10 @@ export default function WordsPage() {
   const handleBulkRegenerateAudio = async () => {
     if (selectedWords.length === 0) return;
     
-    const confirmed = window.confirm(`Regenerate audio for ${selectedWords.length} word(s)?`);
-    if (!confirmed) return;
+    setShowRegenerateConfirm(true);
+  };
 
+  const confirmBulkRegenerateAudio = async () => {
     setIsRegenerating(true);
     try {
       // Use the new bulk audio regeneration endpoint
@@ -357,6 +365,7 @@ export default function WordsPage() {
       });
       toast.success(`Audio regeneration started for ${selectedWords.length} word(s)`);
       setSelectedWords([]);
+      setShowRegenerateConfirm(false);
       refresh();
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to regenerate audio');
@@ -1021,7 +1030,6 @@ export default function WordsPage() {
       <WordsDataTable
         words={uniqueWords}
         isLoading={isLoading}
-        onEdit={openEditModal}
         onDelete={handleDelete}
         onRegenerateAudio={handleRegenerateAudio}
         onViewDetails={(wordId) => setViewDetailWordId(wordId)}
@@ -1390,6 +1398,32 @@ export default function WordsPage() {
           onUpdate={() => refresh()}
         />
       )}
+
+      {/* Bulk Delete Confirmation */}
+      <ConfirmationModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={confirmBulkDelete}
+        title="Delete Words"
+        message={`Are you sure you want to delete ${selectedWords.length} word(s)? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isDeleting}
+      />
+
+      {/* Bulk Regenerate Audio Confirmation */}
+      <ConfirmationModal
+        isOpen={showRegenerateConfirm}
+        onClose={() => setShowRegenerateConfirm(false)}
+        onConfirm={confirmBulkRegenerateAudio}
+        title="Regenerate Audio"
+        message={`Regenerate audio for ${selectedWords.length} word(s)? This will replace existing audio files.`}
+        confirmText="Regenerate"
+        cancelText="Cancel"
+        variant="warning"
+        isLoading={isRegenerating}
+      />
     </div>
   );
 }

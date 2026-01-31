@@ -95,7 +95,7 @@ export default function TestingPage() {
             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Result:
             </h4>
-            <pre className="p-4 text-xs bg-gray-50 border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700 overflow-x-auto">
+            <pre className="p-4 text-xs text-gray-900 dark:text-white bg-gray-50 border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700 overflow-x-auto">
               {telegramResult}
             </pre>
           </div>
@@ -129,7 +129,7 @@ export default function TestingPage() {
             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Result:
             </h4>
-            <pre className="p-4 text-xs bg-gray-50 border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700 overflow-x-auto">
+            <pre className="p-4 text-xs text-gray-900 dark:text-white bg-gray-50 border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700 overflow-x-auto">
               {criticalResult}
             </pre>
           </div>
@@ -160,7 +160,7 @@ export default function TestingPage() {
             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Result:
             </h4>
-            <pre className="p-4 text-xs bg-gray-50 border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700 overflow-x-auto">
+            <pre className="p-4 text-xs text-gray-900 dark:text-white bg-gray-50 border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700 overflow-x-auto">
               {resourceResult}
             </pre>
           </div>
@@ -169,7 +169,7 @@ export default function TestingPage() {
 
       {/* Critical Alert Confirmation Modal */}
       {showCriticalConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
           <div className="w-full max-w-md p-6 bg-white rounded-lg dark:bg-gray-900">
             <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
               Confirm Critical Alert Test

@@ -263,8 +263,8 @@ export default function GamesPage() {
         </div>
       </div>
 
-      {/* Games Table */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden dark:bg-gray-900 dark:border-gray-800">
+      {/* Games Table - Desktop Only */}
+      <div className="hidden lg:block bg-white border border-gray-200 rounded-lg overflow-hidden dark:bg-gray-900 dark:border-gray-800">
         {isLoading ? (
           <div className="p-8 text-center">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
@@ -389,6 +389,81 @@ export default function GamesPage() {
         ) : (
           <div className="p-8 text-center">
             <p className="text-gray-500 dark:text-gray-400">No games found. Create your first game!</p>
+          </div>
+        )}
+      </div>
+
+      {/* Games Grid - Mobile Only */}
+      <div className="lg:hidden">
+        {isLoading ? (
+          <div className="p-8 text-center bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+            <p className="mt-2 text-sm text-gray-500">Loading games...</p>
+          </div>
+        ) : games && games.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4">
+            {games.map((game: Game) => (
+              <div
+                key={game.id}
+                className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4"
+              >
+                {/* Game Title & Description */}
+                <div className="mb-3">
+                  <div className="text-base font-semibold text-gray-900 dark:text-white mb-1">
+                    {game.title}
+                  </div>
+                  {game.description && (
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      {game.description}
+                    </div>
+                  )}
+                </div>
+
+                {/* Badges */}
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-100 text-brand-800 dark:bg-brand-900 dark:text-brand-300">
+                    {languages?.find((l: Language) => Number(l.id) === game.language_id)?.name || 'Unknown'}
+                  </span>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                    {game.game_type.replace('_', ' ')}
+                  </span>
+                  <StatusBadge status={game.is_active ? "active" : "inactive"} />
+                </div>
+
+                {/* Created Date */}
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                  Created: {new Date(game.created_at).toLocaleDateString()}
+                </div>
+
+                {/* Actions */}
+                <div className="flex flex-col gap-2 border-t border-gray-200 dark:border-gray-800 pt-3">
+                  <button
+                    onClick={() => toggleGameStatus(String(game.id), game.is_active)}
+                    className="w-full px-4 py-2 text-sm font-medium text-brand-600 bg-brand-50 hover:bg-brand-100 dark:bg-brand-900/20 dark:text-brand-400 rounded-lg transition-colors"
+                  >
+                    {game.is_active ? 'Deactivate' : 'Activate'}
+                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => openEditModal(game)}
+                      className="flex-1 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 rounded-lg transition-colors"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteClick(String(game.id), game.title)}
+                      className="flex-1 px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 rounded-lg transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-8 text-center text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg">
+            <p>No games found. Create your first game!</p>
           </div>
         )}
       </div>

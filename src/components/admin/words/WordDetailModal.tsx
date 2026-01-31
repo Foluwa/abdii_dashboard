@@ -41,6 +41,13 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
   const [editedExampleYoruba, setEditedExampleYoruba] = useState('');
   const [editedExampleEnglish, setEditedExampleEnglish] = useState('');
   const [isRegeneratingAudio, setIsRegeneratingAudio] = useState(false);
+  const [exampleCount, setExampleCount] = useState(3);
+  const [customTTSText, setCustomTTSText] = useState('');
+  const [generatedAudioUrl, setGeneratedAudioUrl] = useState<string | null>(null);
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [editingFormId, setEditingFormId] = useState<string | null>(null);
+  const [editedForm, setEditedForm] = useState('');
+  const [editedFormType, setEditedFormType] = useState('');
 
   const handleUpdateLemma = async () => {
     if (!editedLemma.trim()) return;
@@ -117,16 +124,12 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
   };
 
   const handleGenerateExamples = async () => {
-    const count = prompt('How many examples to generate? (1-10)', '3');
-    if (!count) return;
-    
-    const numCount = parseInt(count);
-    if (isNaN(numCount) || numCount < 1 || numCount > 10) {
-      alert('Please enter a number between 1 and 10');
+    if (exampleCount < 1 || exampleCount > 10) {
+      showToast('Please enter a number between 1 and 10', 'error');
       return;
     }
 
-    await generateExamples(wordId, numCount);
+    await generateExamples(wordId, exampleCount);
     mutate();
     onUpdate();
   };
@@ -136,6 +139,91 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
     await deleteExample(exampleId);
     mutate();
     onUpdate();
+  };
+
+  const handleGenerateCustomAudio = async () => {
+    if (!customTTSText.trim()) {
+      showToast('Please enter text for audio generation', 'error');
+      return;
+    }
+
+    setIsGeneratingAudio(true);
+    try {
+      const response = await apiClient.post('/api/v1/admin/audio/generate', {
+        text: customTTSText,
+        provider: 'spitch',
+        voice_code: 'funmi',
+        language_code: 'yor',
+        save_to_s3: true,
+        audio_format: 'wav'
+      });
+      
+      setGeneratedAudioUrl(response.data.audio_url);
+      showToast('Audio generated successfully. Listen and accept or reject.', 'success');
+    } catch (error: any) {
+      showToast(error.response?.data?.detail || 'Failed to generate audio', 'error');
+    } finally {
+      setIsGeneratingAudio(false);
+    }
+  };
+
+  const startEditForm = (form: any) => {
+    setEditedForm(form.form);
+    setEditedFormType(form.form_type || 'variant');
+    setEditingFormId(form.id);
+  };
+
+  const handleUpdateForm = async (formId: string) => {
+    try {
+      await apiClient.patch(`/api/v1/admin/content/forms/${formId}`, {
+        form: editedForm,
+        form_type: editedFormType
+      });
+      showToast('Form updated successfully', 'success');
+      setEditingFormId(null);
+      mutate();
+      onUpdate();
+    } catch (error: any) {
+      showToast(error.response?.data?.detail || 'Failed to update form', 'error');
+    }
+  };
+
+  const handleAcceptCustomAudio = async () => {
+    if (!generatedAudioUrl) return;
+
+    try {
+      await apiClient.patch(`/api/v1/admin/content/words/${wordId}`, {
+        audio_url: generatedAudioUrl
+      });
+      showToast('Audio updated successfully', 'success');
+      setGeneratedAudioUrl(null);
+      setCustomTTSText('');
+      mutate();
+      onUpdate();
+    } catch (error: any) {
+      showToast(error.response?.data?.detail || 'Failed to update audio', 'error');
+    }
+  };
+
+  const handleRejectCustomAudio = () => {
+    setGeneratedAudioUrl(null);
+    showToast('Audio rejected', 'info');
+  };
+
+  const handleTogglePublish = async () => {
+    const endpoint = wordDetail.word.is_published ? 'unpublish' : 'publish';
+    const action = wordDetail.word.is_published ? 'unpublish' : 'publish';
+    
+    if (!confirm(`Are you sure you want to ${action} this word?`)) return;
+
+    try {
+      await apiClient.post(`/api/v1/admin/content/words/${wordId}/${endpoint}`);
+      showToast(`Word ${action}ed successfully`, 'success');
+      mutate();
+      onUpdate();
+    } catch (error: any) {
+      showToast(error.response?.data?.detail || `Failed to ${action} word`, 'error');
+    }
   };
 
   const playAudio = (audioUrl: string, id: string) => {
@@ -351,18 +439,71 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                     Forms
                   </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="space-y-3">
                     {wordDetail.forms.map((form) => (
-                      <div
-                        key={form.id}
-                        className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3"
-                      >
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          {form.form_type}
-                        </div>
-                        <div className="font-medium text-gray-900 dark:text-white">
-                          {form.form}
-                        </div>
+                      <div key={form.id}>
+                        {editingFormId === form.id ? (
+                          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-3">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Form Type
+                              </label>
+                              <select
+                                value={editedFormType}
+                                onChange={(e) => setEditedFormType(e.target.value)}
+                                className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-gray-900 dark:text-white"
+                              >
+                                <option value="variant">Variant</option>
+                                <option value="canonical">Canonical</option>
+                                <option value="plural">Plural</option>
+                                <option value="singular">Singular</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Form Text
+                              </label>
+                              <input
+                                type="text"
+                                value={editedForm}
+                                onChange={(e) => setEditedForm(e.target.value)}
+                                className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-gray-900 dark:text-white"
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleUpdateForm(form.id)}
+                                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center gap-2"
+                              >
+                                <FiSave />
+                                Save
+                              </button>
+                              <button
+                                onClick={() => setEditingFormId(null)}
+                                className="px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-white rounded-lg"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 flex items-center justify-between">
+                            <div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400">
+                                {form.form_type}
+                              </div>
+                              <div className="font-medium text-gray-900 dark:text-white">
+                                {form.form}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => startEditForm(form)}
+                              className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                            >
+                              <FiEdit2 />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -395,27 +536,38 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
 
           {activeTab === 'examples' && (
             <>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-4">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                   Usage Examples ({wordDetail.examples.length})
                 </h3>
-                <button
-                  onClick={handleGenerateExamples}
-                  disabled={isGenerating}
-                  className="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-400 text-white rounded-lg flex items-center gap-2 text-sm"
-                >
-                  {isGenerating ? (
-                    <>
-                      <FiLoader className="animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <FiPlus />
-                      Generate Examples
-                    </>
-                  )}
-                </button>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={exampleCount}
+                    onChange={(e) => setExampleCount(parseInt(e.target.value) || 1)}
+                    className="w-16 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-center text-sm"
+                    placeholder="Count"
+                  />
+                  <button
+                    onClick={handleGenerateExamples}
+                    disabled={isGenerating}
+                    className="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-400 text-white rounded-lg flex items-center gap-2 text-sm"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <FiLoader className="animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <FiPlus />
+                        Generate Examples
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {wordDetail.examples.length === 0 ? (
@@ -516,46 +668,116 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
 
           {activeTab === 'audio' && (
             <>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  Audio Files ({wordDetail.audio_files?.length ?? 0})
-                </h3>
-                <button
-                  onClick={handleRegenerateAudio}
-                  disabled={isRegeneratingAudio}
-                  className="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-400 text-white rounded-lg flex items-center gap-2 text-sm"
-                >
-                  {isRegeneratingAudio ? (
-                    <>
-                      <FiLoader className="animate-spin" />
-                      Regenerating...
-                    </>
-                  ) : (
-                    <>
-                      <FiRefreshCw />
-                      Regenerate Audio
-                    </>
-                  )}
-                </button>
-              </div>
+              <div className="space-y-4">
+                {/* Custom Audio Generation Section */}
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+                    Generate Custom Audio
+                  </h4>
+                  <div className="space-y-3">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={customTTSText}
+                        onChange={(e) => setCustomTTSText(e.target.value)}
+                        placeholder="Enter text for audio generation"
+                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+                      />
+                      <button
+                        onClick={handleGenerateCustomAudio}
+                        disabled={isGeneratingAudio || !customTTSText.trim()}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg flex items-center gap-2 text-sm whitespace-nowrap"
+                      >
+                        {isGeneratingAudio ? (
+                          <>
+                            <FiLoader className="animate-spin" />
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <FiVolume2 />
+                            Generate
+                          </>
+                        )}
+                      </button>
+                    </div>
 
-              {(wordDetail.audio_files?.length ?? 0) === 0 ? (
-                <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-                  No audio files available. Click "Regenerate Audio" to create audio for this word.
+                    {generatedAudioUrl && (
+                      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 flex-1">
+                            <button
+                              onClick={() => playAudio(generatedAudioUrl, 'generated-audio')}
+                              className="text-brand-600 hover:text-brand-700 dark:text-brand-400"
+                            >
+                              <FiVolume2 size={20} />
+                            </button>
+                            <span className="text-sm text-gray-600 dark:text-gray-400">
+                              Preview generated audio
+                            </span>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={handleAcceptCustomAudio}
+                              className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm"
+                            >
+                              Accept
+                            </button>
+                            <button
+                              onClick={handleRejectCustomAudio}
+                              className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {wordDetail.audio_files?.map((audio) => (
-                    <div
-                      key={audio.id}
-                      className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 flex items-center justify-between"
+
+                {/* Existing Audio Files */}
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Audio Files ({wordDetail.audio_files?.length ?? 0})
+                    </h3>
+                    <button
+                      onClick={handleRegenerateAudio}
+                      disabled={isRegeneratingAudio}
+                      className="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-400 text-white rounded-lg flex items-center gap-2 text-sm"
                     >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3">
-                          <span className="font-medium text-gray-900 dark:text-white">
-                            {audio.provider}
-                          </span>
-                          {audio.voice_id && (
+                      {isRegeneratingAudio ? (
+                        <>
+                          <FiLoader className="animate-spin" />
+                          Regenerating...
+                        </>
+                      ) : (
+                        <>
+                          <FiRefreshCw />
+                          Regenerate Audio
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {(wordDetail.audio_files?.length ?? 0) === 0 ? (
+                    <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                      No audio files available. Click "Regenerate Audio" to create audio for this word.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {wordDetail.audio_files?.map((audio) => (
+                        <div
+                          key={audio.id}
+                          className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 flex items-center justify-between"
+                        >
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3">
+                              <span className="font-medium text-gray-900 dark:text-white">
+                                {audio.provider}
+                              </span>
+                              {audio.voice_id && (
                             <span className="text-xs text-gray-500 dark:text-gray-400">
                               {audio.voice_id}
                             </span>
@@ -578,12 +800,34 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
                   ))}
                 </div>
               )}
+                </div>
+              </div>
             </>
           )}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-between">
+          <button
+            onClick={handleTogglePublish}
+            className={`px-4 py-2 rounded-lg flex items-center gap-2 ${
+              wordDetail.word.is_published
+                ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
+                : 'bg-green-600 hover:bg-green-700 text-white'
+            }`}
+          >
+            {wordDetail.word.is_published ? (
+              <>
+                <FiEdit2 />
+                Unpublish (Draft)
+              </>
+            ) : (
+              <>
+                <FiSave />
+                Publish
+              </>
+            )}
+          </button>
           <button
             onClick={onClose}
             className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg"

@@ -1,29 +1,35 @@
 "use client";
 
 import React, { useState } from "react";
-import { useAppSettings } from "@/hooks/useApi";
+import { useConfig } from "@/hooks/useApi";
 import { useAuth } from "@/context/AuthContext";
 import { apiClient } from "@/lib/api";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Alert from "@/components/ui/alert/SimpleAlert";
-import { AppSetting } from "@/types/api";
+import { ConfigEntry } from "@/types/api";
+import { useToast } from "@/contexts/ToastContext";
 
 export default function AppConfigPage() {
+  const toast = useToast();
   const { user, isAdmin } = useAuth();
-  const { settings, isLoading, isError, refresh } = useAppSettings();
+  const { config: settings, isLoading, isError, refresh } = useConfig();
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>("");
   const [editDescription, setEditDescription] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string>("all");
 
-  const startEdit = (setting: AppSetting) => {
-    setEditingKey(setting.setting_key);
-    setEditValue(JSON.stringify(setting.setting_value, null, 2));
+  const startEdit = (setting: ConfigEntry) => {
+    setEditingKey(setting.key);
+    // Get the actual value based on value_type
+    let value;
+    if (setting.value_type === 'int') value = setting.value_int;
+    else if (setting.value_type === 'float') value = setting.value_float;
+    else if (setting.value_type === 'boolean') value = setting.value_bool;
+    else value = setting.value_text;
+    setEditValue(String(value ?? ''));
     setEditDescription(setting.description || "");
-    setSuccessMessage("");
     setErrorMessage("");
   };
 
@@ -41,25 +47,30 @@ export default function AppConfigPage() {
     setIsSaving(true);
     setErrorMessage("");
     try {
-      // Parse JSON value
-      const parsedValue = JSON.parse(editValue);
-      
-      const payload = {
-        setting_value: parsedValue,
-        description: editDescription || null,
-      };
+      const setting = settings.find(s => s.key === key);
+      if (!setting) {
+        setErrorMessage("Setting not found");
+        return;
+      }
 
-      await apiClient.put(`/api/v1/admin/configs/app-settings/${key}`, payload);
-      setSuccessMessage(`✓ Setting "${key}" updated successfully`);
+      // Build payload based on value_type
+      const payload: any = { description: editDescription || null };
+      if (setting.value_type === 'int') {
+        payload.value_int = parseInt(editValue);
+      } else if (setting.value_type === 'float') {
+        payload.value_float = parseFloat(editValue);
+      } else if (setting.value_type === 'boolean') {
+        payload.value_bool = editValue === 'true' || editValue === '1';
+      } else {
+        payload.value_text = editValue;
+      }
+
+      await apiClient.put(`/api/v1/admin/configs/${key}`, payload);
+      toast.success(`Configuration "${key}" updated successfully`);
       setEditingKey(null);
       refresh();
-      setTimeout(() => setSuccessMessage(""), 3000);
     } catch (error: any) {
-      if (error instanceof SyntaxError) {
-        setErrorMessage("Invalid JSON format. Please check your syntax.");
-      } else {
-        setErrorMessage(error.response?.data?.detail || "Failed to update setting");
-      }
+      setErrorMessage(error.response?.data?.detail || "Failed to update configuration");
     } finally {
       setIsSaving(false);
     }
@@ -131,7 +142,6 @@ export default function AppConfigPage() {
         </p>
       </div>
 
-      {successMessage && <Alert variant="success">{successMessage}</Alert>}
       {errorMessage && <Alert variant="error">{errorMessage}</Alert>}
 
       {categories.length > 0 && (
@@ -175,7 +185,7 @@ export default function AppConfigPage() {
         ) : (
           filteredSettings.map((setting) => (
             <div
-              key={setting.setting_key}
+              key={setting.key}
               className="bg-white border border-gray-200 rounded-lg dark:bg-gray-900 dark:border-gray-800 overflow-hidden"
             >
               <div className="p-4">
@@ -183,14 +193,16 @@ export default function AppConfigPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        {setting.setting_key}
+                        {setting.key}
                       </h3>
-                      <span className="px-2 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-full dark:text-blue-300 dark:bg-blue-900">
-                        {setting.category}
-                      </span>
-                      {setting.is_public && (
+                      {setting.category && (
+                        <span className="px-2 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-full dark:text-blue-300 dark:bg-blue-900">
+                          {setting.category}
+                        </span>
+                      )}
+                      {setting.is_active && (
                         <span className="px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full dark:text-green-300 dark:bg-green-900">
-                          Public
+                          Active
                         </span>
                       )}
                     </div>
@@ -200,7 +212,7 @@ export default function AppConfigPage() {
                       </p>
                     )}
                   </div>
-                  {editingKey !== setting.setting_key && (
+                  {editingKey !== setting.key && (
                     <button
                       onClick={() => startEdit(setting)}
                       className="px-3 py-1 text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
@@ -210,21 +222,21 @@ export default function AppConfigPage() {
                   )}
                 </div>
 
-                {editingKey === setting.setting_key ? (
+                {editingKey === setting.key ? (
                   <div className="space-y-3">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Configuration (JSON)
+                        Value ({setting.value_type})
                       </label>
                       <textarea
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
-                        rows={8}
+                        rows={3}
                         className="w-full px-3 py-2 text-sm font-mono bg-gray-50 border border-gray-300 rounded-lg dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-                        placeholder='{"key": "value"}'
+                        placeholder={setting.value_type === 'boolean' ? 'true or false' : 'Enter value'}
                       />
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        Enter valid JSON format
+                        Type: {setting.value_type}
                       </p>
                     </div>
 
@@ -243,7 +255,7 @@ export default function AppConfigPage() {
 
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => saveEdit(setting.setting_key)}
+                        onClick={() => saveEdit(setting.key)}
                         disabled={isSaving}
                         className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
@@ -261,7 +273,10 @@ export default function AppConfigPage() {
                 ) : (
                   <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
                     <pre className="text-sm text-gray-800 dark:text-gray-200 overflow-x-auto">
-                      {JSON.stringify(setting.setting_value, null, 2)}
+                      {setting.value_type === 'int' ? setting.value_int :
+                       setting.value_type === 'float' ? setting.value_float :
+                       setting.value_type === 'boolean' ? String(setting.value_bool) :
+                       setting.value_text}
                     </pre>
                   </div>
                 )}

@@ -143,88 +143,189 @@ export default function LanguagesPage() {
         </button>
       </div>
 
-      {/* Languages Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Languages Table - Desktop Only */}
+      <div className="hidden lg:block bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Language
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Code
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Letters
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Phonics
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Learners
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              {languages.map((language: Language) => (
+                <tr key={language.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center space-x-3">
+                      <span className="text-2xl">{language.flag_emoji || "🌐"}</span>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                          {language.name}
+                        </div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                          {language.native_name}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 uppercase">
+                      <FiGlobe className="mr-1" />
+                      {language.iso_639_3}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <div className="flex items-center justify-center space-x-1">
+                      <FiBook className="text-gray-400" size={14} />
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                        {language.total_letters || 0}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <div className="flex items-center justify-center space-x-1">
+                      <FiMusic className="text-gray-400" size={14} />
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                        {language.total_phonics || 0}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <div className="flex items-center justify-center space-x-1">
+                      <FiUsers className="text-gray-400" size={14} />
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                        {language.user_count || 0}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        !language.is_deleted
+                          ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                          : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400"
+                      }`}
+                    >
+                      {!language.is_deleted ? "Active" : "Inactive"}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end space-x-2">
+                      <button
+                        onClick={() => openEditModal(language)}
+                        className="px-3 py-1 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClick(language.id, language.name)}
+                        className="px-3 py-1 text-sm font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Languages Grid - Mobile Only */}
+      <div className="grid grid-cols-1 gap-4 lg:hidden">
         {languages.map((language: Language) => (
           <div
             key={language.id}
-            className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6"
+            className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4 hover:shadow-md transition-shadow"
           >
-            {/* Header */}
-            <div className="flex items-start justify-between mb-4">
+            <div className="flex items-start justify-between mb-3">
               <div className="flex items-center space-x-3">
-                <span className="text-4xl">{language.flag_emoji || "🌐"}</span>
+                <span className="text-3xl">{language.flag_emoji || "🌐"}</span>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  <div className="text-base font-semibold text-gray-900 dark:text-white">
                     {language.name}
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  </div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
                     {language.native_name}
-                  </p>
+                  </div>
                 </div>
               </div>
               <span
-                className={`px-2 py-1 text-xs rounded-full ${
+                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                   !language.is_deleted
-                    ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
-                    : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                    ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                    : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400"
                 }`}
               >
                 {!language.is_deleted ? "Active" : "Inactive"}
               </span>
             </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div className="flex items-center space-x-2">
-                <FiBook className="text-gray-400" />
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Letters</p>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">
+            <div className="flex items-center space-x-2 mb-3">
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 uppercase">
+                <FiGlobe className="mr-1" />
+                {language.iso_639_3}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              <div className="text-center">
+                <div className="flex items-center justify-center space-x-1 mb-1">
+                  <FiBook className="text-gray-400" size={14} />
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">
                     {language.total_letters || 0}
-                  </p>
+                  </span>
                 </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">Letters</div>
               </div>
-              <div className="flex items-center space-x-2">
-                <FiMusic className="text-gray-400" />
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Phonics</p>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">
+              <div className="text-center">
+                <div className="flex items-center justify-center space-x-1 mb-1">
+                  <FiMusic className="text-gray-400" size={14} />
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">
                     {language.total_phonics || 0}
-                  </p>
+                  </span>
                 </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">Phonics</div>
               </div>
-              <div className="flex items-center space-x-2">
-                <FiUsers className="text-gray-400" />
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Learners</p>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">
+              <div className="text-center">
+                <div className="flex items-center justify-center space-x-1 mb-1">
+                  <FiUsers className="text-gray-400" size={14} />
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">
                     {language.user_count || 0}
-                  </p>
+                  </span>
                 </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <FiGlobe className="text-gray-400" />
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Code</p>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white uppercase">
-                    {language.iso_639_3}
-                  </p>
-                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">Learners</div>
               </div>
             </div>
-
-            {/* Actions */}
-            <div className="flex space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-gray-200 dark:border-gray-700">
               <button
                 onClick={() => openEditModal(language)}
-                className="flex-1 px-3 py-2 text-sm bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 rounded hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                className="px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
               >
                 Edit
               </button>
               <button
                 onClick={() => handleDeleteClick(language.id, language.name)}
-                className="flex-1 px-3 py-2 text-sm bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                className="px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20 rounded-lg transition-colors"
               >
                 Delete
               </button>

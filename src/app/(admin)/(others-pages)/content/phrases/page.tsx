@@ -208,9 +208,10 @@ export default function PhrasesPage() {
         />
       </div>
 
-      {/* Phrases Table */}
+      {/* Phrases Table - Desktop Only */}
       {selectedLanguage && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+        <>
+        <div className="hidden lg:block bg-white dark:bg-gray-800 rounded-lg shadow">
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -333,6 +334,85 @@ export default function PhrasesPage() {
             </>
           )}
         </div>
+
+        {/* Mobile Grid View */}
+        <div className="lg:hidden">
+          {loading ? (
+            <div className="flex items-center justify-center h-64 bg-white dark:bg-gray-800 rounded-lg shadow">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+          ) : phrases.length === 0 ? (
+            <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow">
+              <p className="text-gray-500 dark:text-gray-400">No phrases found for this language</p>
+              <button
+                onClick={openCreateModal}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Add First Phrase
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
+              {phrases.map((phrase) => (
+                <div key={phrase.id} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                  {/* Phrase */}
+                  <div className="mb-3">
+                    <div className="text-base font-semibold text-gray-900 dark:text-white mb-1">
+                      {phrase.phrase}
+                    </div>
+                    {phrase.romanization && (
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {phrase.romanization}
+                      </div>
+                    )}
+                  </div>
+                  <div className="mb-3">
+                    <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">
+                      Translation
+                    </div>
+                    <div className="text-sm text-gray-700 dark:text-gray-300">
+                      {phrase.translation}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mb-3">
+                    {phrase.category && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                        {phrase.category}
+                      </span>
+                    )}
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                      Level {phrase.difficulty_level || 1}
+                    </span>
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        phrase.is_published
+                          ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+                          : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                      }`}
+                    >
+                      {phrase.is_published ? "Published" : "Draft"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 border-t border-gray-200 dark:border-gray-700 pt-3">
+                    <button
+                      onClick={() => openEditModal(phrase)}
+                      className="flex-1 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 rounded-lg"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteClick(phrase.id, phrase.phrase)}
+                      className="flex-1 px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 rounded-lg"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        </>
       )}
 
       {/* Modal */}

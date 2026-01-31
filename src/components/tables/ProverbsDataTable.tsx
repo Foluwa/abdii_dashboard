@@ -32,7 +32,9 @@ export default function ProverbsDataTable({
   }
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
+    <>
+    {/* Desktop Table View */}
+    <div className="hidden lg:block bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
@@ -150,5 +152,104 @@ export default function ProverbsDataTable({
         </Table>
       </div>
     </div>
+
+    {/* Mobile Grid View */}
+    <div className="lg:hidden grid grid-cols-1 gap-4">
+      {isLoading ? (
+        <div className="flex items-center justify-center h-64 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600"></div>
+        </div>
+      ) : proverbs.length > 0 ? (
+        proverbs.map((proverb) => (
+          <div
+            key={proverb.id}
+            className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4"
+          >
+            {/* Proverb */}
+            <div className="mb-3">
+              <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">
+                Proverb
+              </div>
+              <div className="text-base font-semibold text-gray-900 dark:text-white">
+                {proverb.proverb}
+              </div>
+            </div>
+
+            {/* Translation */}
+            <div className="mb-3">
+              <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">
+                Translation
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                {proverb.translation}
+              </div>
+            </div>
+
+            {/* Meaning */}
+            {proverb.meaning && (
+              <div className="mb-3">
+                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">
+                  Meaning
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  {proverb.meaning}
+                </div>
+              </div>
+            )}
+
+            {/* Category */}
+            {proverb.category && (
+              <div className="mb-3">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-100 text-brand-700 dark:bg-brand-900/20 dark:text-brand-400">
+                  {proverb.category}
+                </span>
+              </div>
+            )}
+
+            {/* Audio */}
+            {proverb.audio_url && (
+              <div className="mb-3">
+                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">
+                  Audio
+                </div>
+                <AudioWaveform
+                  src={proverb.audio_url}
+                  height={40}
+                  waveColor="#94a3b8"
+                  progressColor="#3b82f6"
+                  cursorColor="#1d4ed8"
+                />
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 border-t border-gray-200 dark:border-gray-700 pt-3">
+              <button
+                onClick={() => onEdit(proverb)}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-brand-600 bg-brand-50 hover:bg-brand-100 dark:bg-brand-900/20 dark:text-brand-400"
+              >
+                <FiEdit className="h-3.5 w-3.5" />
+                Edit
+              </button>
+              <button
+                onClick={() => onDelete(proverb.id)}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400"
+              >
+                <FiTrash2 className="h-3.5 w-3.5" />
+                Delete
+              </button>
+            </div>
+          </div>
+        ))
+      ) : (
+        <div className="flex flex-col items-center gap-2 p-12 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No proverbs found</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500">
+            Try adjusting your filters or add a new proverb
+          </p>
+        </div>
+      )}
+    </div>
+    </>
   );
 }

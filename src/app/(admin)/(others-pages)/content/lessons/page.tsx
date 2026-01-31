@@ -9,6 +9,7 @@ import Toast from "@/components/ui/toast/Toast";
 import { StyledSelect } from "@/components/ui/form/StyledSelect";
 import StatusBadge from "@/components/admin/StatusBadge";
 import { ConfirmationModal } from "@/components/ui/modal/ConfirmationModal";
+import { Modal } from "@/components/ui/modal";
 import Alert from "@/components/ui/alert/SimpleAlert";
 import { FiGlobe, FiCheckCircle } from "react-icons/fi";
 
@@ -211,66 +212,168 @@ export default function LessonsPage() {
         </div>
       </div>
 
-      {/* Lessons Grid */}
+      {/* Lessons - Table on Desktop, Grid on Mobile */}
       {isLoading ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map((i: any) => (
-            <div key={i} className="p-6 bg-white border border-gray-200 rounded-lg dark:bg-gray-900 dark:border-gray-800 animate-pulse">
-              <div className="h-40 bg-gray-200 rounded dark:bg-gray-700 mb-4"></div>
-              <div className="h-4 bg-gray-200 rounded dark:bg-gray-700 mb-2"></div>
-              <div className="h-4 bg-gray-200 rounded dark:bg-gray-700"></div>
-            </div>
-          ))}
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6 animate-pulse">
+          <div className="space-y-4">
+            {[1, 2, 3].map((i: any) => (
+              <div key={i} className="h-20 bg-gray-200 rounded dark:bg-gray-700"></div>
+            ))}
+          </div>
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {/* Desktop Table View - Hidden on Mobile */}
+          <div className="hidden lg:block bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Order
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Lesson
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Language
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {lessons && lessons.length > 0 ? (
+                    lessons.map((lesson: any) => (
+                      <tr key={lesson.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                        <td className="px-6 py-4">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                            {lesson.order}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center space-x-3">
+                            {lesson.image_url && (
+                              <img
+                                src={lesson.image_url}
+                                alt={lesson.title}
+                                className="w-12 h-12 object-cover rounded-lg"
+                              />
+                            )}
+                            <div>
+                              <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                {lesson.title}
+                              </div>
+                              {lesson.description && (
+                                <div className="text-sm text-gray-500 dark:text-gray-400 line-clamp-1">
+                                  {lesson.description}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center space-x-2">
+                            <FiGlobe className="text-gray-400" size={14} />
+                            <span className="text-sm text-gray-900 dark:text-white">
+                              ID: {lesson.language_id}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <StatusBadge status={getStatusBadgeStatus(lesson.status)} label={lesson.status} />
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end space-x-2">
+                            <button
+                              onClick={() => window.location.href = `/content/lessons/${lesson.id}/builder`}
+                              className="px-3 py-1 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600"
+                            >
+                              Build
+                            </button>
+                            <button
+                              onClick={() => openEditModal(lesson)}
+                              className="px-3 py-1 text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteClick(lesson.id, lesson.title)}
+                              className="px-3 py-1 text-sm font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                        No lessons found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Mobile Grid View - Hidden on Desktop */}
+          <div className="grid grid-cols-1 gap-4 lg:hidden">
             {lessons && lessons.length > 0 ? (
               lessons.map((lesson: any) => (
                 <div
                   key={lesson.id}
-                  className="p-6 bg-white border border-gray-200 rounded-lg dark:bg-gray-900 dark:border-gray-800 hover:shadow-lg transition-shadow"
+                  className="p-4 bg-white border border-gray-200 rounded-lg dark:bg-gray-900 dark:border-gray-800"
                 >
                   {lesson.image_url && (
                     <img
                       src={lesson.image_url}
                       alt={lesson.title}
-                      className="w-full h-40 object-cover rounded-lg mb-4"
+                      className="w-full h-40 object-cover rounded-lg mb-3"
                     />
                   )}
                   <div className="flex items-start justify-between mb-2">
-                    <span className="px-2 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded dark:bg-gray-800 dark:text-gray-300">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
                       Order: {lesson.order}
                     </span>
                     <StatusBadge status={getStatusBadgeStatus(lesson.status)} label={lesson.status} />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
                     {lesson.title}
                   </h3>
                   {lesson.description && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 line-clamp-2">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
                       {lesson.description}
                     </p>
                   )}
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                    Language ID: {lesson.language_id}
-                  </p>
+                  <div className="flex items-center space-x-2 mb-3">
+                    <FiGlobe className="text-gray-400" size={14} />
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      Language ID: {lesson.language_id}
+                    </span>
+                  </div>
                   <div className="flex gap-2">
                     <button
                       onClick={() => window.location.href = `/content/lessons/${lesson.id}/builder`}
-                      className="flex-1 px-3 py-1 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600"
+                      className="flex-1 px-3 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600"
                     >
                       Build
                     </button>
                     <button
                       onClick={() => openEditModal(lesson)}
-                      className="flex-1 px-3 py-1 text-sm font-medium text-brand-600 border border-brand-600 rounded-lg hover:bg-brand-50 dark:text-brand-400 dark:border-brand-400 dark:hover:bg-brand-900/20"
+                      className="flex-1 px-3 py-2 text-sm font-medium text-brand-600 border border-brand-600 rounded-lg hover:bg-brand-50 dark:text-brand-400 dark:border-brand-400 dark:hover:bg-brand-900/20"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => handleDeleteClick(lesson.id, lesson.title)}
-                      className="px-3 py-1 text-sm font-medium text-red-600 border border-red-600 rounded-lg hover:bg-red-50 dark:text-red-400 dark:border-red-400 dark:hover:bg-red-900/20"
+                      className="px-3 py-2 text-sm font-medium text-red-600 border border-red-600 rounded-lg hover:bg-red-50 dark:text-red-400 dark:border-red-400 dark:hover:bg-red-900/20"
                     >
                       Delete
                     </button>
@@ -278,7 +381,7 @@ export default function LessonsPage() {
                 </div>
               ))
             ) : (
-              <div className="col-span-full text-center py-12 text-gray-500 dark:text-gray-400">
+              <div className="text-center py-12 text-gray-500 dark:text-gray-400 bg-white border border-gray-200 rounded-lg dark:bg-gray-900 dark:border-gray-800">
                 No lessons found
               </div>
             )}
@@ -312,118 +415,115 @@ export default function LessonsPage() {
       )}
 
       {/* Create/Edit Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="w-full max-w-2xl p-6 bg-white rounded-lg dark:bg-gray-900 max-h-[90vh] overflow-y-auto">
-            <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">
-              {editingLesson ? "Edit Lesson" : "Create New Lesson"}
-            </h2>
-            
-            {errorMessage && (
-              <Alert variant="error" className="mb-4">{errorMessage}</Alert>
-            )}
+      <Modal
+        isOpen={showModal}
+        onClose={closeModal}
+        title={editingLesson ? "Edit Lesson" : "Create New Lesson"}
+        maxWidth="2xl"
+      >
+        {errorMessage && (
+          <Alert variant="error" className="mb-4">{errorMessage}</Alert>
+        )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <StyledSelect
-                  label="Language *"
-                  value={formData.language_id.toString()}
-                  onChange={(e) => setFormData({ ...formData, language_id: Number(e.target.value) })}
-                  options={[
-                    { value: "", label: "Select language" },
-                    ...(languages?.map((lang: any) => ({ value: lang.id.toString(), label: lang.name })) || []),
-                  ]}
-                  fullWidth
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Order *
-                </label>
-                <input
-                  type="number"
-                  value={formData.order}
-                  onChange={(e) => setFormData({ ...formData, order: Number(e.target.value) })}
-                  required
-                  min="1"
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Title *
-                </label>
-                <input
-                  type="text"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  required
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Description
-                </label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  rows={3}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Image URL
-                </label>
-                <input
-                  type="url"
-                  value={formData.image_url}
-                  onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-                  placeholder="https://..."
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <StyledSelect
-                  label="Status *"
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value as LessonStatus })}
-                  options={[
-                    { value: "draft", label: "Draft" },
-                    { value: "published", label: "Published" },
-                    { value: "archived", label: "Archived" },
-                  ]}
-                  fullWidth
-                  required
-                />
-              </div>
-
-              <div className="flex gap-2 pt-4">
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600"
-                >
-                  {editingLesson ? "Update" : "Create"}
-                </button>
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <StyledSelect
+              label="Language *"
+              value={formData.language_id.toString()}
+              onChange={(e) => setFormData({ ...formData, language_id: Number(e.target.value) })}
+              options={[
+                { value: "", label: "Select language" },
+                ...(languages?.map((lang: any) => ({ value: lang.id.toString(), label: lang.name })) || []),
+              ]}
+              fullWidth
+              required
+            />
           </div>
-        </div>
-      )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Order *
+            </label>
+            <input
+              type="number"
+              value={formData.order}
+              onChange={(e) => setFormData({ ...formData, order: Number(e.target.value) })}
+              required
+              min="1"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Title *
+            </label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              required
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Description
+            </label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              rows={3}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Image URL
+            </label>
+            <input
+              type="url"
+              value={formData.image_url}
+              onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
+              placeholder="https://..."
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+            />
+          </div>
+
+          <div>
+            <StyledSelect
+              label="Status *"
+              value={formData.status}
+              onChange={(e) => setFormData({ ...formData, status: e.target.value as LessonStatus })}
+              options={[
+                { value: "draft", label: "Draft" },
+                { value: "published", label: "Published" },
+                { value: "archived", label: "Archived" },
+              ]}
+              fullWidth
+              required
+            />
+          </div>
+
+          <div className="flex gap-2 pt-4">
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600"
+            >
+              {editingLesson ? "Update" : "Create"}
+            </button>
+            <button
+              type="button"
+              onClick={closeModal}
+              className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Delete Confirmation Modal */}
       <ConfirmationModal

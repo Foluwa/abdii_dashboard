@@ -399,9 +399,10 @@ export default function UsersPage() {
                             {/* Avatar */}
                             <div className="flex-shrink-0">
                               {user.avatar_svg ? (
-                                <div 
-                                  className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-700 [&>svg]:w-full [&>svg]:h-full"
-                                  dangerouslySetInnerHTML={{ __html: user.avatar_svg }}
+                                <img 
+                                  src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(user.avatar_svg)}`}
+                                  alt={user.display_name || "User avatar"}
+                                  className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700"
                                 />
                               ) : (
                                 <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-900 flex items-center justify-center">
@@ -438,6 +439,11 @@ export default function UsersPage() {
                               {user.device_name && (
                                 <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[120px]" title={user.device_name}>
                                   {user.device_name}
+                                </div>
+                              )}
+                              {user.device_app_version && (
+                                <div className="text-xs text-gray-400 dark:text-gray-500">
+                                  v{user.device_app_version}{user.device_build_number ? `(${user.device_build_number})` : ''}
                                 </div>
                               )}
                             </div>

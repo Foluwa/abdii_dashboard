@@ -7,7 +7,7 @@ import {
   TableRow,
 } from "../ui/table";
 import Badge from "../ui/badge/Badge";
-import { FiTrash2, FiEdit, FiVolume2, FiSearch, FiFilter, FiEye } from "react-icons/fi";
+import { FiTrash2, FiVolume2, FiSearch, FiFilter, FiEye } from "react-icons/fi";
 import { ConfirmationModal } from "../ui/modal/ConfirmationModal";
 import { AudioWaveform } from "@/components/ui/audio/AudioWaveform";
 
@@ -30,7 +30,6 @@ interface Word {
 interface WordsDataTableProps {
   words: Word[];
   isLoading: boolean;
-  onEdit: (word: Word) => void;
   onDelete: (wordId: string) => void;
   onSearch: (query: string) => void;
   searchQuery: string;
@@ -44,7 +43,6 @@ interface WordsDataTableProps {
 export default function WordsDataTable({
   words,
   isLoading,
-  onEdit,
   onDelete,
   onSearch,
   searchQuery,
@@ -105,7 +103,9 @@ export default function WordsDataTable({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+    <>
+    {/* Desktop Table View */}
+    <div className="hidden lg:block overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
       {/* Search Bar */}
       <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-4 dark:border-white/[0.05] dark:bg-white/[0.02]">
         <div className="flex items-center gap-3">
@@ -171,6 +171,12 @@ export default function WordsDataTable({
                   className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
                 >
                   Difficulty
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                >
+                  Status
                 </TableCell>
                 <TableCell
                   isHeader
@@ -247,6 +253,19 @@ export default function WordsDataTable({
                       )}
                     </TableCell>
 
+                    {/* Status */}
+                    <TableCell className="px-4 py-3 text-start">
+                      {word.is_published ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                          Published
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                          Draft
+                        </span>
+                      )}
+                    </TableCell>
+
                     {/* Audio */}
                     <TableCell className="px-4 py-3 text-start">
                       {word.audio_url ? (
@@ -294,13 +313,6 @@ export default function WordsDataTable({
                             {regeneratingAudio === word.id ? 'Regenerating...' : 'Audio'}
                           </button>
                         )}
-                        <button
-                          onClick={() => onEdit(word)}
-                          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-brand-600 transition-colors hover:bg-brand-50 hover:text-brand-700 dark:text-brand-400 dark:hover:bg-brand-900/20"
-                        >
-                          <FiEdit className="h-3.5 w-3.5" />
-                          Edit
-                        </button>
                         <button
                           onClick={() => setDeleteConfirm({ id: word.id, word: word.word })}
                           className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
@@ -350,5 +362,137 @@ export default function WordsDataTable({
         variant="danger"
       />
     </div>
+
+    {/* Mobile Grid View */}
+    <div className="lg:hidden">
+      {/* Search Bar */}
+      <div className="mb-4 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] px-4 py-3">
+        <div className="relative">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+            <FiSearch className="h-4 w-4 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => onSearch(e.target.value)}
+            placeholder="Search words..."
+            className="block w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"
+          />
+        </div>
+      </div>
+
+      {/* Grid Cards */}
+      {isLoading ? (
+        <div className="flex items-center justify-center p-12 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-brand-600 dark:border-gray-700 dark:border-t-brand-500"></div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Loading words...</p>
+          </div>
+        </div>
+      ) : words && words.length > 0 ? (
+        <div className="grid grid-cols-1 gap-4">
+          {words.map((word) => (
+            <div
+              key={word.id}
+              className="rounded-xl border border-gray-200 bg-white p-4 dark:border-white/[0.05] dark:bg-white/[0.03]"
+            >
+              {/* Word Header */}
+              <div className="mb-3 flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xl font-bold text-gray-900 dark:text-white">
+                      {word.word}
+                    </span>
+                    {onSelectWord && (
+                      <input
+                        type="checkbox"
+                        checked={selectedWords.includes(word.id)}
+                        onChange={() => onSelectWord(word.id)}
+                        className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-800"
+                      />
+                    )}
+                  </div>
+                  {word.lemma_normalized !== word.word.toLowerCase() && (
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      Normalized: {word.lemma_normalized}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Badges */}
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                {getPOSBadge(word.pos)}
+                {word.difficulty_level && getDifficultyBadge(word.difficulty_level)}
+              </div>
+
+              {/* Category */}
+              {word.category && (
+                <div className="mb-3">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Category: </span>
+                  <span className="text-sm text-gray-900 dark:text-white">{word.category}</span>
+                </div>
+              )}
+
+              {/* Audio */}
+              {word.audio_url && (
+                <div className="mb-3">
+                  <AudioWaveform
+                    src={word.audio_url}
+                    height={40}
+                    waveColor="#94a3b8"
+                    progressColor="#3b82f6"
+                    cursorColor="#1d4ed8"
+                  />
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 border-t border-gray-200 pt-3 dark:border-gray-700">
+                {onViewDetails && (
+                  <button
+                    onClick={() => onViewDetails(word.id)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                  >
+                    <FiEye className="h-3.5 w-3.5" />
+                    View
+                  </button>
+                )}
+                {onRegenerateAudio && (
+                  <button
+                    onClick={() => {
+                      setRegeneratingAudio(word.id);
+                      onRegenerateAudio(word.id);
+                      setTimeout(() => setRegeneratingAudio(null), 2000);
+                    }}
+                    disabled={regeneratingAudio === word.id}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-purple-600 transition-colors hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed dark:text-purple-400 dark:hover:bg-purple-900/20"
+                  >
+                    <FiVolume2 className={`h-3.5 w-3.5 ${regeneratingAudio === word.id ? 'animate-pulse' : ''}`} />
+                    Audio
+                  </button>
+                )}
+                <button
+                  onClick={() => setDeleteConfirm({ id: word.id, word: word.word })}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                  <FiTrash2 className="h-3.5 w-3.5" />
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-gray-200 bg-white p-12 dark:border-white/[0.05] dark:bg-white/[0.03]">
+          <FiSearch className="h-12 w-12 text-gray-300 dark:text-gray-700" />
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No words found</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500">
+            Try adjusting your search or filters
+          </p>
+        </div>
+      )}
+    </div>
+    </>
   );
 }

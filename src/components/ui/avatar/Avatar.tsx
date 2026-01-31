@@ -1,5 +1,6 @@
 import Image from "next/image";
 import React from "react";
+import { cleanSvgForDisplay } from "@/lib/svg-utils";
 
 interface AvatarProps {
   src: string; // URL of the avatar image
@@ -38,6 +39,9 @@ const Avatar: React.FC<AvatarProps> = ({
   size = "medium",
   status = "none",
 }) => {
+  // Clean SVG data if needed (handles escaped HTML entities)
+  const cleanedSrc = cleanSvgForDisplay(src) || src;
+  
   return (
     <div className={`relative  rounded-full ${sizeClasses[size]}`}>
       {/* Avatar Image */}
@@ -45,7 +49,7 @@ const Avatar: React.FC<AvatarProps> = ({
         width="0"
         height="0"
         sizes="100vw"
-        src={src}
+        src={cleanedSrc}
         alt={alt}
         className="object-cover w-full rounded-full"
       />
