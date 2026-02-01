@@ -27,7 +27,7 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
   const { wordDetail, isLoading, mutate } = useWordDetail(wordId);
   const { generateExamples, isGenerating } = useExampleGeneration();
   const { deleteExample, isSubmitting } = useExampleManagement();
-  const { showToast } = useToast();
+  const toast = useToast();
   
   const [activeTab, setActiveTab] = useState<'overview' | 'examples' | 'audio'>('overview');
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
@@ -54,12 +54,12 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
     
     try {
       await apiClient.patch(`/api/v1/admin/content/words/${wordId}`, { lemma: editedLemma });
-      showToast('Lemma updated successfully', 'success');
+      toast.success('Lemma updated successfully');
       setIsEditingLemma(false);
       mutate();
       onUpdate();
     } catch (error: any) {
-      showToast(error.response?.data?.detail || 'Failed to update lemma', 'error');
+      toast.error(error.response?.data?.detail || 'Failed to update lemma');
     }
   };
 
@@ -68,12 +68,12 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
     
     try {
       await apiClient.patch(`/api/v1/admin/content/glosses/${glossId}`, { definition: editedGloss });
-      showToast('Definition updated successfully', 'success');
+      toast.success('Definition updated successfully');
       setEditingGlossId(null);
       mutate();
       onUpdate();
     } catch (error: any) {
-      showToast(error.response?.data?.detail || 'Failed to update definition', 'error');
+      toast.error(error.response?.data?.detail || 'Failed to update definition');
     }
   };
 
@@ -83,12 +83,12 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
         example_yoruba: editedExampleYoruba,
         example_english: editedExampleEnglish
       });
-      showToast('Example updated successfully', 'success');
+      toast.success('Example updated successfully');
       setEditingExampleId(null);
       mutate();
       onUpdate();
     } catch (error: any) {
-      showToast(error.response?.data?.detail || 'Failed to update example', 'error');
+      toast.error(error.response?.data?.detail || 'Failed to update example');
     }
   };
 
@@ -98,10 +98,10 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
     setIsRegeneratingAudio(true);
     try {
       await apiClient.post(`/api/v1/admin/content/words/single/${wordId}/regenerate-audio`, {});
-      showToast('Audio regeneration queued successfully', 'success');
+      toast.success('Audio regeneration queued successfully');
       setTimeout(() => mutate(), 2000); // Refresh after 2s
     } catch (error: any) {
-      showToast(error.response?.data?.detail || 'Failed to regenerate audio', 'error');
+      toast.error(error.response?.data?.detail || 'Failed to regenerate audio');
     } finally {
       setIsRegeneratingAudio(false);
     }
@@ -118,14 +118,14 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
   };
 
   const startEditExample = (example: any) => {
-    setEditedExampleYoruba(example.example_yoruba);
-    setEditedExampleEnglish(example.example_english || '');
+    setEditedExampleYoruba(example.text);
+    setEditedExampleEnglish(example.translation_text || '');
     setEditingExampleId(example.id);
   };
 
   const handleGenerateExamples = async () => {
     if (exampleCount < 1 || exampleCount > 10) {
-      showToast('Please enter a number between 1 and 10', 'error');
+      toast.error('Please enter a number between 1 and 10');
       return;
     }
 
@@ -143,7 +143,7 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
 
   const handleGenerateCustomAudio = async () => {
     if (!customTTSText.trim()) {
-      showToast('Please enter text for audio generation', 'error');
+      toast.error('Please enter text for audio generation');
       return;
     }
 
@@ -159,9 +159,9 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
       });
       
       setGeneratedAudioUrl(response.data.audio_url);
-      showToast('Audio generated successfully. Listen and accept or reject.', 'success');
+      toast.success('Audio generated successfully. Listen and accept or reject.');
     } catch (error: any) {
-      showToast(error.response?.data?.detail || 'Failed to generate audio', 'error');
+      toast.error(error.response?.data?.detail || 'Failed to generate audio');
     } finally {
       setIsGeneratingAudio(false);
     }
@@ -179,12 +179,12 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
         form: editedForm,
         form_type: editedFormType
       });
-      showToast('Form updated successfully', 'success');
+      toast.success('Form updated successfully');
       setEditingFormId(null);
       mutate();
       onUpdate();
     } catch (error: any) {
-      showToast(error.response?.data?.detail || 'Failed to update form', 'error');
+      toast.error(error.response?.data?.detail || 'Failed to update form');
     }
   };
 
@@ -195,22 +195,24 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
       await apiClient.patch(`/api/v1/admin/content/words/${wordId}`, {
         audio_url: generatedAudioUrl
       });
-      showToast('Audio updated successfully', 'success');
+      toast.success('Audio updated successfully');
       setGeneratedAudioUrl(null);
       setCustomTTSText('');
       mutate();
       onUpdate();
     } catch (error: any) {
-      showToast(error.response?.data?.detail || 'Failed to update audio', 'error');
+      toast.error(error.response?.data?.detail || 'Failed to update audio');
     }
   };
 
   const handleRejectCustomAudio = () => {
     setGeneratedAudioUrl(null);
-    showToast('Audio rejected', 'info');
+    toast.info('Audio rejected');
   };
 
   const handleTogglePublish = async () => {
+    if (!wordDetail?.word) return;
+    
     const endpoint = wordDetail.word.is_published ? 'unpublish' : 'publish';
     const action = wordDetail.word.is_published ? 'unpublish' : 'publish';
     
@@ -218,11 +220,11 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
 
     try {
       await apiClient.post(`/api/v1/admin/content/words/${wordId}/${endpoint}`);
-      showToast(`Word ${action}ed successfully`, 'success');
+      toast.success(`Word ${action}ed successfully`);
       mutate();
       onUpdate();
     } catch (error: any) {
-      showToast(error.response?.data?.detail || `Failed to ${action} word`, 'error');
+      toast.error(error.response?.data?.detail || `Failed to ${action} word`);
     }
   };
 
@@ -292,7 +294,7 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
               </div>
             )}
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {word.pos} · {word.language_code}
+              {word.pos} · {word.language_name}
             </p>
           </div>
           <button
@@ -370,10 +372,10 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
                                 ) : (
                                   <div className="flex items-start justify-between gap-2">
                                     <p className="flex-1 text-gray-900 dark:text-white">
-                                      {gloss.definition}
+                                      {gloss.text}
                                     </p>
                                     <button
-                                      onClick={() => startEditGloss(gloss.id, gloss.definition)}
+                                      onClick={() => startEditGloss(gloss.id, gloss.text)}
                                       className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                                     >
                                       <FiEdit2 size={14} />
@@ -422,9 +424,9 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
                         <span className="font-mono text-sm bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded">
                           {pron.ipa}
                         </span>
-                        {pron.notation && (
+                        {pron.dialect && (
                           <span className="text-xs text-gray-500">
-                            ({pron.notation})
+                            ({pron.dialect})
                           </span>
                         )}
                       </div>
@@ -523,7 +525,7 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
                         className="flex items-center gap-3 text-gray-700 dark:text-gray-300"
                       >
                         <span className="text-xs text-gray-500 dark:text-gray-400 uppercase">
-                          {rel.relation_type}:
+                          {rel.relationship_type}:
                         </span>
                         <span className="font-medium">{rel.related_word}</span>
                       </div>
@@ -625,11 +627,11 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 space-y-2">
                             <p className="text-gray-900 dark:text-white font-medium">
-                              {example.example_yoruba}
+                              {example.text}
                             </p>
-                            {example.example_english && (
+                            {example.translation_text && (
                               <p className="text-gray-600 dark:text-gray-400 text-sm">
-                                {example.example_english}
+                                {example.translation_text}
                               </p>
                             )}
                             {example.audio_url && (
@@ -740,7 +742,7 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Audio Files ({wordDetail.audio_files?.length ?? 0})
+                      Audio Files ({wordDetail.audio?.length ?? 0})
                     </h3>
                     <button
                       onClick={handleRegenerateAudio}
@@ -761,13 +763,13 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
                     </button>
                   </div>
 
-                  {(wordDetail.audio_files?.length ?? 0) === 0 ? (
+                  {(wordDetail.audio?.length ?? 0) === 0 ? (
                     <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                       No audio files available. Click "Regenerate Audio" to create audio for this word.
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {wordDetail.audio_files?.map((audio) => (
+                      {wordDetail.audio?.map((audio) => (
                         <div
                           key={audio.id}
                           className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 flex items-center justify-between"
@@ -775,19 +777,14 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
                           <div className="flex-1">
                             <div className="flex items-center gap-3">
                               <span className="font-medium text-gray-900 dark:text-white">
-                                {audio.provider}
+                                {audio.tts_provider}
                               </span>
-                              {audio.voice_id && (
+                              {audio.voice_name && (
                             <span className="text-xs text-gray-500 dark:text-gray-400">
-                              {audio.voice_id}
+                              {audio.voice_name}
                             </span>
                           )}
                         </div>
-                        {audio.format && (
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
-                            {audio.format.toUpperCase()}
-                          </span>
-                        )}
                       </div>
                       <button
                         onClick={() => playAudio(audio.audio_url, `audio-${audio.id}`)}

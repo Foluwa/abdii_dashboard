@@ -23,6 +23,7 @@ interface Word {
   category: string | null;
   difficulty_level: number | null;
   usage_notes: string | null;
+  is_published: boolean;
   created_at: string;
   updated_at: string;
 }

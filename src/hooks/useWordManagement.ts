@@ -35,6 +35,7 @@ export interface WordDetail {
     word_category: string | null;
     difficulty_level: number | null;
     usage_notes: string | null;
+    is_published: boolean;
   };
   senses: Array<{
     id: string;
@@ -56,6 +57,7 @@ export interface WordDetail {
     translation_text: string;
     translation_language_id: string;
     translation_language_name: string;
+    audio_url: string | null;
     created_at: string;
   }>;
   audio: Array<{
@@ -77,6 +79,7 @@ export interface WordDetail {
   forms: Array<{
     id: string;
     form: string;
+    form_type: string | null;
     tags: string[];
     ipa: string | null;
   }>;
@@ -182,7 +185,7 @@ export function useBulkAudioRegeneration() {
       }
 
       if (data.failed_words && data.failed_words.length > 0) {
-        toast.warning(`${data.failed_words.length} words failed to queue`);
+        toast.info(`${data.failed_words.length} words failed to queue`);
       }
 
       return data;
