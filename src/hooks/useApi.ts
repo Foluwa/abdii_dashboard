@@ -500,15 +500,90 @@ export function useSubscriptions(filters?: {
 /**
  * Subscription Stats Hook
  */
-export function useSubscriptionStats() {
-  const { data, error, mutate } = useSWR(
-    '/api/v1/admin/subscriptions/stats/summary',
-    fetcher,
-    { revalidateOnFocus: false }
-  );
+export function useSubscriptionStats(filters?: { user_q?: string }) {
+  const params = new URLSearchParams();
+  if (filters?.user_q) params.append('user_q', filters.user_q);
+
+  const query = params.toString();
+  const url = query
+    ? `/api/v1/admin/subscriptions/stats/summary?${query}`
+    : '/api/v1/admin/subscriptions/stats/summary';
+  const { data, error, mutate } = useSWR(url, fetcher, { revalidateOnFocus: false });
 
   return {
     stats: data,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
+/**
+ * Subscription Events Hook
+ */
+export function useSubscriptionEvents(filters?: {
+  event_type?: string;
+  user_id?: string;
+  user_q?: string;
+  provider?: string;
+  days?: number;
+  page?: number;
+  limit?: number;
+}) {
+  const params = new URLSearchParams();
+  if (filters?.event_type) params.append('event_type', filters.event_type);
+  if (filters?.user_id) params.append('user_id', filters.user_id);
+  if (filters?.user_q) params.append('user_q', filters.user_q);
+  if (filters?.provider) params.append('provider', filters.provider);
+  if (filters?.days) params.append('days', filters.days.toString());
+  if (filters?.page) params.append('page', filters.page.toString());
+  if (filters?.limit) params.append('limit', filters.limit.toString());
+
+  const url = `/api/v1/admin/subscriptions/events?${params.toString()}`;
+  const { data, error, mutate } = useSWR(url, fetcher, {
+    revalidateOnFocus: false,
+  });
+
+  return {
+    events: data?.items || [],
+    total: data?.total || 0,
+    page: data?.page || 1,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
+/**
+ * Subscription Verification Attempts Hook
+ */
+export function useSubscriptionAttempts(filters?: {
+  user_id?: string;
+  user_q?: string;
+  provider?: string;
+  success?: boolean;
+  days?: number;
+  page?: number;
+  limit?: number;
+}) {
+  const params = new URLSearchParams();
+  if (filters?.user_id) params.append('user_id', filters.user_id);
+  if (filters?.user_q) params.append('user_q', filters.user_q);
+  if (filters?.provider) params.append('provider', filters.provider);
+  if (filters?.success !== undefined) params.append('success', String(filters.success));
+  if (filters?.days) params.append('days', filters.days.toString());
+  if (filters?.page) params.append('page', filters.page.toString());
+  if (filters?.limit) params.append('limit', filters.limit.toString());
+
+  const url = `/api/v1/admin/subscriptions/attempts?${params.toString()}`;
+  const { data, error, mutate } = useSWR(url, fetcher, {
+    revalidateOnFocus: false,
+  });
+
+  return {
+    attempts: data?.items || [],
+    total: data?.total || 0,
+    page: data?.page || 1,
     isLoading: !error && !data,
     isError: error,
     refresh: mutate,

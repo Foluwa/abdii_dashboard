@@ -1,7 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
-import { useSubscriptions, useSubscriptionStats } from "@/hooks/useApi";
+import {
+  useSubscriptions,
+  useSubscriptionAttempts,
+  useSubscriptionEvents,
+  useSubscriptionStats,
+} from "@/hooks/useApi";
 
 type SubscriptionStatus = "active" | "canceled" | "expired" | "trial" | "";
 type SubscriptionProvider = "apple" | "google" | "stripe" | "";
@@ -18,10 +23,39 @@ interface Subscription {
   end_date: string | null;
 }
 
+interface SubscriptionEvent {
+  id: string;
+  subscription_id: string;
+  user_id: string;
+  user_email: string | null;
+  event_type: string;
+  plan_id: string;
+  status: string;
+  platform: string;
+  provider: string;
+  created_at: string;
+}
+
+interface SubscriptionAttempt {
+  id: string;
+  user_id: string;
+  user_email: string | null;
+  subscription_id: string | null;
+  provider: string;
+  platform: string;
+  product_id: string | null;
+  plan_id: string | null;
+  success: boolean;
+  status: string | null;
+  message: string | null;
+  created_at: string;
+}
+
 export default function SubscriptionsPage() {
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<SubscriptionStatus>("");
   const [provider, setProvider] = useState<SubscriptionProvider>("");
+  const [userSearch, setUserSearch] = useState("");
   const limit = 20;
 
   const { subscriptions, total, isLoading, isError } = useSubscriptions({
@@ -29,9 +63,36 @@ export default function SubscriptionsPage() {
     limit,
     status: status || undefined,
     provider: provider || undefined,
+    search: userSearch || undefined,
   });
 
-  const { stats, isLoading: statsLoading } = useSubscriptionStats();
+  const { stats, isLoading: statsLoading } = useSubscriptionStats({
+    user_q: userSearch || undefined,
+  });
+
+  const {
+    events,
+    isLoading: eventsLoading,
+    isError: eventsError,
+  } = useSubscriptionEvents({
+    page: 1,
+    limit: 20,
+    days: 30,
+    provider: provider || undefined,
+    user_q: userSearch || undefined,
+  });
+
+  const {
+    attempts,
+    isLoading: attemptsLoading,
+    isError: attemptsError,
+  } = useSubscriptionAttempts({
+    page: 1,
+    limit: 20,
+    days: 30,
+    provider: provider || undefined,
+    user_q: userSearch || undefined,
+  });
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "—";
@@ -68,6 +129,17 @@ export default function SubscriptionsPage() {
       default:
         return "📱";
     }
+  };
+
+  const formatDateTime = (dateString: string | null) => {
+    if (!dateString) return "—";
+    return new Date(dateString).toLocaleString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
   return (
@@ -154,6 +226,21 @@ export default function SubscriptionsPage() {
         <div className="flex flex-wrap gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              User
+            </label>
+            <input
+              value={userSearch}
+              onChange={(e) => {
+                setUserSearch(e.target.value);
+                setPage(1);
+              }}
+              placeholder="User ID, email, or username"
+              className="block w-full sm:w-96 lg:w-[32rem] h-12 px-4 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 text-base"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Status
             </label>
             <select
@@ -162,7 +249,7 @@ export default function SubscriptionsPage() {
                 setStatus(e.target.value as SubscriptionStatus);
                 setPage(1);
               }}
-              className="block w-40 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+              className="block w-full sm:w-56 h-12 px-4 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 text-base"
             >
               <option value="">All Statuses</option>
               <option value="active">Active</option>
@@ -182,7 +269,7 @@ export default function SubscriptionsPage() {
                 setProvider(e.target.value as SubscriptionProvider);
                 setPage(1);
               }}
-              className="block w-40 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+              className="block w-full sm:w-56 h-12 px-4 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 text-base"
             >
               <option value="">All Providers</option>
               <option value="apple">Apple</option>
@@ -316,6 +403,179 @@ export default function SubscriptionsPage() {
               </div>
             )}
           </>
+        )}
+      </div>
+
+      {/* Recent Subscription Events */}
+      <div className="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Subscription Events</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Webhook + system lifecycle events (renewals, cancellations, refunds, failures)
+          </p>
+        </div>
+
+        {eventsLoading ? (
+          <div className="flex items-center justify-center h-48">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        ) : eventsError ? (
+          <div className="flex items-center justify-center h-48 text-red-500">Failed to load events</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Time
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    User
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Event
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Plan
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Provider
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                {events?.map((ev: SubscriptionEvent) => (
+                  <tr key={ev.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      {formatDateTime(ev.created_at)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">
+                        {ev.user_email || "No email"}
+                      </div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">{ev.user_id?.slice(0, 8)}...</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                      {ev.event_type}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                      {ev.plan_id || "—"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(
+                          ev.status
+                        )}`}
+                      >
+                        {ev.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                      {getProviderIcon(ev.provider)} {ev.provider} ({ev.platform})
+                    </td>
+                  </tr>
+                ))}
+                {(!events || events.length === 0) && (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500 dark:text-gray-400">
+                      No events found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Recent Verification Attempts */}
+      <div className="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Verification Attempts</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Client receipt verification attempts (including failures/expired/invalid)
+          </p>
+        </div>
+
+        {attemptsLoading ? (
+          <div className="flex items-center justify-center h-48">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        ) : attemptsError ? (
+          <div className="flex items-center justify-center h-48 text-red-500">Failed to load attempts</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Time
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    User
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Provider
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Result
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Plan / Product
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Message
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                {attempts?.map((at: SubscriptionAttempt) => (
+                  <tr key={at.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      {formatDateTime(at.created_at)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">
+                        {at.user_email || "No email"}
+                      </div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">{at.user_id?.slice(0, 8)}...</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                      {getProviderIcon(at.provider)} {at.provider} ({at.platform})
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          at.success
+                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                            : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                        }`}
+                      >
+                        {at.success ? "success" : "failed"}{at.status ? ` (${at.status})` : ""}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                      <div>{at.plan_id || "—"}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{at.product_id || "—"}</div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-md truncate">
+                      {at.message || "—"}
+                    </td>
+                  </tr>
+                ))}
+                {(!attempts || attempts.length === 0) && (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500 dark:text-gray-400">
+                      No attempts found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
