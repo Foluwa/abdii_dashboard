@@ -6,8 +6,21 @@ import { apiClient } from "@/lib/api";
 import type { Lesson, Word, Sentence, Phrase, Proverb } from "@/types/api";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Alert from "@/components/ui/alert/SimpleAlert";
+import { useToast } from "@/contexts/ToastContext";
 
-type ContentType = "word" | "sentence" | "phrase" | "proverb";
+type ContentType = "letter" | "word" | "sentence" | "phrase" | "proverb";
+
+interface Letter {
+  id: string;
+  language_id: string;
+  glyph: string;
+  display_name: string;
+  is_digraph: boolean;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+  audio_url?: string;
+}
 
 interface LessonContent {
   content_type: ContentType;
@@ -21,19 +34,26 @@ export default function LessonBuilderPage() {
   const router = useRouter();
   const lessonId = params?.id as string;
 
+  const toast = useToast();
+
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [lessonContent, setLessonContent] = useState<LessonContent[]>([]);
   const [availableContent, setAvailableContent] = useState<{
+    letters: Letter[];
     words: Word[];
     sentences: Sentence[];
     phrases: Phrase[];
     proverbs: Proverb[];
   }>({
+    letters: [],
     words: [],
     sentences: [],
     phrases: [],
     proverbs: [],
   });
+
+  const [contentDetailsByKey, setContentDetailsByKey] = useState<Record<string, any>>({});
+  const [failedContentKeys, setFailedContentKeys] = useState<Record<string, true>>({});
   
   const [selectedContentType, setSelectedContentType] = useState<ContentType>("word");
   const [searchQuery, setSearchQuery] = useState("");
@@ -41,6 +61,40 @@ export default function LessonBuilderPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+
+  const getBuilderContentType = (apiContentType: any): ContentType => {
+    switch (apiContentType) {
+      case "letters":
+        return "letter";
+      case "words":
+        return "word";
+      case "sentences":
+        return "sentence";
+      case "phrases":
+        return "phrase";
+      case "proverbs":
+        return "proverb";
+      default:
+        return "word";
+    }
+  };
+
+  const getApiContentType = (builderType: ContentType): string | null => {
+    switch (builderType) {
+      case "letter":
+        return "letters";
+      case "word":
+        return "words";
+      case "sentence":
+        return "sentences";
+      case "phrase":
+        return "phrases";
+      case "proverb":
+        return "proverbs";
+      default:
+        return null;
+    }
+  };
 
   useEffect(() => {
     if (lessonId) {
@@ -54,14 +108,135 @@ export default function LessonBuilderPage() {
     }
   }, [lesson?.language_id, selectedContentType]);
 
+  useEffect(() => {
+    if (!lesson || lessonContent.length === 0) return;
+    void loadMissingContentDetails();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lesson, lessonContent, availableContent]);
+
+  const getContentKey = (contentType: ContentType, contentId: string) => `${contentType}:${contentId}`;
+
+  const getPrimaryText = (contentType: ContentType, item: any): string | null => {
+    if (!item) return null;
+    switch (contentType) {
+      case "letter":
+        return item.glyph ?? item.display_name ?? null;
+      case "word":
+        // Public /api/v1/words/{word_id} returns YorubaWordResponse (yoruba_word, english_translation)
+        return item.word ?? item.lemma ?? item.yoruba_word ?? item.text ?? null;
+      case "sentence":
+      case "phrase":
+        return item.text ?? item.yoruba_text ?? null;
+      case "proverb":
+        return item.proverb ?? item.text ?? item.yoruba_text ?? null;
+      default:
+        return null;
+    }
+  };
+
+  const getSecondaryText = (item: any): string | null => {
+    if (!item) return null;
+    return item.translation ?? item.meaning ?? item.english_translation ?? null;
+  };
+
+  const findAvailableItem = (contentType: ContentType, contentId: string): any | null => {
+    const listKey = `${contentType}s` as keyof typeof availableContent;
+    const items = (availableContent[listKey] as any[]) || [];
+    return (
+      items.find((i) => {
+        const candidates = [i?.id, i?.word_id, i?.lemma_id, i?.content_id].filter(Boolean);
+        return candidates.some((c) => String(c) === String(contentId));
+      }) ?? null
+    );
+  };
+
+  const getLatestContentSnapshot = (versions: any[]): any | null => {
+    if (!Array.isArray(versions) || versions.length === 0) return null;
+    const latest = versions.reduce((best, curr) => {
+      const bestNum = typeof best?.version_number === "number" ? best.version_number : -1;
+      const currNum = typeof curr?.version_number === "number" ? curr.version_number : -1;
+      return currNum > bestNum ? curr : best;
+    }, versions[0]);
+    return latest?.content_snapshot ?? null;
+  };
+
+  const fetchContentViaVersions = async (contentType: ContentType, contentId: string): Promise<any | null> => {
+    // Backend stores content_versions.content_type as the singular enum values:
+    // letter, word, sentence, phrase, proverb, lesson, game
+    const response = await apiClient.get(`/api/v1/admin/content/versions/${contentType}/${contentId}`);
+    return getLatestContentSnapshot(response.data);
+  };
+
+  const loadMissingContentDetails = async () => {
+    const missing = lessonContent
+      .map((c) => ({ ...c, key: getContentKey(c.content_type, c.content_id) }))
+      .filter((c) => {
+        if (contentDetailsByKey[c.key]) return false;
+        if (failedContentKeys[c.key]) return false;
+        if (findAvailableItem(c.content_type, c.content_id)) return false;
+        return true;
+      });
+
+    if (missing.length === 0) return;
+
+    const directEndpoints: Partial<Record<ContentType, (id: string) => string>> = {
+      sentence: (id) => `/api/v1/admin/content/sentences/${id}`,
+      phrase: (id) => `/api/v1/admin/content/phrases/${id}`,
+    };
+
+    const results = await Promise.allSettled(
+      missing.map(async (c) => {
+        const urlBuilder = directEndpoints[c.content_type];
+        if (urlBuilder) {
+          const response = await apiClient.get(urlBuilder(c.content_id));
+          return { key: c.key, item: response.data };
+        }
+        // Fallback for words/letters/proverbs (and any other types without a GET-by-id endpoint):
+        // Use content versions to retrieve the latest content snapshot.
+        const snapshot = await fetchContentViaVersions(c.content_type, c.content_id);
+        return snapshot ? { key: c.key, item: snapshot } : null;
+      })
+    );
+
+    const updates: Record<string, any> = {};
+    const failed: Record<string, true> = {};
+    results.forEach((r, idx) => {
+      const key = missing[idx]?.key;
+      if (!key) return;
+
+      if (r.status === "fulfilled" && r.value?.key) {
+        updates[r.value.key] = r.value.item;
+      } else {
+        failed[key] = true;
+      }
+    });
+    if (Object.keys(updates).length > 0) {
+      setContentDetailsByKey((prev) => ({ ...prev, ...updates }));
+    }
+    if (Object.keys(failed).length > 0) {
+      setFailedContentKeys((prev) => ({ ...prev, ...failed }));
+    }
+  };
+
   const loadLessonData = async () => {
     try {
-      const response = await apiClient.get(`/api/v1/admin/lessons/${lessonId}`);
-      setLesson(response.data);
-      
-      // Load lesson content
-      const contentResponse = await apiClient.get(`/api/v1/admin/lessons/${lessonId}/content`);
-      setLessonContent(contentResponse.data.items || []);
+      // Backend defines GET /api/v1/lessons/{lesson_id} (UUID).
+      // There is no GET /api/v1/admin/lessons/{lesson_id}.
+      const response = await apiClient.get(`/api/v1/lessons/${lessonId}`);
+
+      const apiLesson = response.data;
+      setLesson(apiLesson);
+
+      // Derive lesson content from the lesson payload.
+      // Backend stores a single content_type + ordered content_ids array.
+      const derivedType = getBuilderContentType(apiLesson?.content_type);
+      setSelectedContentType(derivedType);
+      const derivedContent: LessonContent[] = (apiLesson?.content_ids || []).map((id: string, index: number) => ({
+        content_type: derivedType,
+        content_id: id,
+        order: index + 1,
+      }));
+      setLessonContent(derivedContent);
       
       setIsLoading(false);
     } catch (error: any) {
@@ -75,17 +250,27 @@ export default function LessonBuilderPage() {
 
     try {
       const endpoints: Record<ContentType, string> = {
-        word: `/api/v1/admin/words?language_id=${lesson.language_id}&page=1&limit=100`,
-        sentence: `/api/v1/admin/sentences?language_id=${lesson.language_id}&page=1&limit=100`,
-        phrase: `/api/v1/admin/phrases?language_id=${lesson.language_id}&page=1&limit=100`,
-        proverb: `/api/v1/admin/proverbs?language_id=${lesson.language_id}&page=1&limit=100`,
+        letter: `/api/v1/admin/content/letters?language_id=${lesson.language_id}&page=1&limit=200`,
+        word: `/api/v1/admin/content/words?language_id=${lesson.language_id}&page=1&limit=100`,
+        sentence: `/api/v1/admin/content/sentences?language_id=${lesson.language_id}&page=1&limit=100`,
+        phrase: `/api/v1/admin/content/phrases?language_id=${lesson.language_id}&page=1&limit=100`,
+        proverb: `/api/v1/admin/content/proverbs?language_id=${lesson.language_id}&page=1&limit=100`,
       };
 
       const response = await apiClient.get(endpoints[selectedContentType]);
-      
+
+      const items =
+        response.data?.items ||
+        response.data?.letters ||
+        response.data?.words ||
+        response.data?.sentences ||
+        response.data?.phrases ||
+        response.data?.proverbs ||
+        response.data ||
+        [];
       setAvailableContent(prev => ({
         ...prev,
-        [`${selectedContentType}s`]: response.data.items || [],
+        [`${selectedContentType}s`]: Array.isArray(items) ? items : [],
       }));
     } catch (error) {
       console.error("Failed to load content:", error);
@@ -93,14 +278,27 @@ export default function LessonBuilderPage() {
   };
 
   const addContentToLesson = (contentId: string, contentType: ContentType) => {
+    const apiContentType = getApiContentType(contentType);
+    if (!apiContentType) {
+      setErrorMessage("This content type is not supported by the lesson API yet");
+      setTimeout(() => setErrorMessage(""), 3000);
+      return;
+    }
+
+    const lessonApiContentType = getApiContentType(getBuilderContentType((lesson as any)?.content_type));
+    if (lessonApiContentType && apiContentType !== lessonApiContentType) {
+      setErrorMessage("This lesson only supports its configured content type");
+      setTimeout(() => setErrorMessage(""), 3000);
+      return;
+    }
+
     // Check if already added
     const exists = lessonContent.some(
       (item) => item.content_id === contentId && item.content_type === contentType
     );
     
     if (exists) {
-      setErrorMessage("This content is already in the lesson");
-      setTimeout(() => setErrorMessage(""), 3000);
+      toast.info("This content is already in the lesson");
       return;
     }
 
@@ -142,13 +340,20 @@ export default function LessonBuilderPage() {
     setErrorMessage("");
 
     try {
-      await apiClient.put(`/api/v1/admin/lessons/${lessonId}/content`, {
-        content: lessonContent.map(item => ({
-          content_type: item.content_type,
-          content_id: item.content_id,
-          order: item.order,
-        })),
-      });
+      const apiContentType = getApiContentType(selectedContentType);
+      if (!apiContentType) {
+        throw new Error("Unsupported content type");
+      }
+
+      await apiClient.put(`/api/v1/admin/lessons/${lessonId}`,
+        {
+          content_type: apiContentType,
+          content_ids: lessonContent
+            .filter((item) => item.content_type === selectedContentType)
+            .sort((a, b) => a.order - b.order)
+            .map((item) => item.content_id),
+        }
+      );
       
       setSuccessMessage("Lesson content saved successfully");
       setTimeout(() => setSuccessMessage(""), 3000);
@@ -163,10 +368,7 @@ export default function LessonBuilderPage() {
     if (!lesson) return;
 
     try {
-      await apiClient.put(`/api/v1/admin/lessons/${lessonId}`, {
-        ...lesson,
-        status: "published",
-      });
+      await apiClient.put(`/api/v1/admin/lessons/${lessonId}`, { status: "published" });
       setSuccessMessage("Lesson published successfully");
       router.push("/content/lessons");
     } catch (error: any) {
@@ -196,9 +398,15 @@ export default function LessonBuilderPage() {
 
   const filteredContent = availableContent[`${selectedContentType}s` as keyof typeof availableContent].filter(
     (item: any) => {
+      if (selectedContentType === "letter") {
+        const text = `${item.glyph || ""} ${item.display_name || ""}`.trim();
+        return text.toLowerCase().includes(searchQuery.toLowerCase());
+      }
       const text = selectedContentType === "word" 
-        ? item.word 
-        : item.text || item.yoruba_text || "";
+        ? item.word || item.lemma || item.yoruba_word || ""
+        : selectedContentType === "proverb"
+          ? item.proverb || item.text || item.yoruba_text || ""
+          : item.text || item.yoruba_text || "";
       return text.toLowerCase().includes(searchQuery.toLowerCase());
     }
   );
@@ -254,7 +462,13 @@ export default function LessonBuilderPage() {
           <div className="p-4 space-y-4">
             {/* Content Type Selector */}
             <div className="flex gap-2">
-              {(["word", "sentence", "phrase", "proverb"] as ContentType[]).map((type) => (
+              {((() => {
+                const lessonType = getBuilderContentType((lesson as any)?.content_type);
+                // Only show tabs that match the lesson's configured type.
+                if (lessonType === "letter") return ["letter"] as ContentType[];
+                if (lessonType === "phrase") return ["phrase"] as ContentType[];
+                return ["word"] as ContentType[];
+              })()).map((type) => (
                 <button
                   key={type}
                   onClick={() => setSelectedContentType(type)}
@@ -264,7 +478,7 @@ export default function LessonBuilderPage() {
                       : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300"
                   }`}
                 >
-                  {type.charAt(0).toUpperCase() + type.slice(1)}s
+                  {type.charAt(0).toUpperCase() + type.slice(1)}{type === "letter" ? "s" : "s"}
                 </button>
               ))}
             </div>
@@ -281,20 +495,26 @@ export default function LessonBuilderPage() {
             {/* Content List */}
             <div className="max-h-[500px] overflow-y-auto space-y-2">
               {filteredContent.length > 0 ? (
-                filteredContent.map((item: any) => (
+                filteredContent.map((item: any, idx: number) => (
                   <div
-                    key={item.id}
+                    key={`${item.id}-${idx}`}
                     className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800 cursor-pointer"
                     onClick={() => addContentToLesson(item.id, selectedContentType)}
                   >
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <p className="text-sm font-medium text-gray-900 dark:text-white">
-                          {selectedContentType === "word" ? item.word : item.text || item.yoruba_text}
+                          {selectedContentType === "letter"
+                            ? item.glyph || item.display_name
+                            : selectedContentType === "word"
+                              ? item.word || item.lemma || item.yoruba_word
+                              : selectedContentType === "proverb"
+                                ? item.proverb || item.text || item.yoruba_text
+                                : item.text || item.yoruba_text}
                         </p>
-                        {item.translation && (
+                        {(item.translation || item.english_translation) && (
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            {item.translation}
+                            {item.translation || item.english_translation}
                           </p>
                         )}
                       </div>
@@ -339,9 +559,35 @@ export default function LessonBuilderPage() {
                             {item.content_type}
                           </span>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          ID: {item.content_id}
-                        </p>
+                        {(() => {
+                          const key = getContentKey(item.content_type, item.content_id);
+                          const canFetchDetails =
+                            item.content_type === "sentence" ||
+                            item.content_type === "phrase" ||
+                            item.content_type === "proverb";
+                          const isLoadingDetails = Boolean(
+                            canFetchDetails &&
+                              !findAvailableItem(item.content_type, item.content_id) &&
+                              !contentDetailsByKey[key] &&
+                              !failedContentKeys[key]
+                          );
+                          const resolvedItem =
+                            findAvailableItem(item.content_type, item.content_id) ?? contentDetailsByKey[key] ?? null;
+                          const primary = getPrimaryText(item.content_type, resolvedItem);
+                          const secondary = getSecondaryText(resolvedItem);
+                          return (
+                            <div className="mt-1">
+                              <p className="text-sm text-gray-900 dark:text-white">
+                                {primary ?? (isLoadingDetails ? "Loading…" : item.content_id)}
+                              </p>
+                              {secondary && (
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                  {secondary}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                       
                       <div className="flex items-center gap-2">

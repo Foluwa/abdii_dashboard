@@ -30,7 +30,13 @@ export default function LessonsPage() {
     page, 
     limit 
   });
-  const { languages } = useLanguages();
+  const { languages, isLoading: isLanguagesLoading } = useLanguages();
+
+  const getLanguageName = (languageId: unknown) => {
+    const match = (languages || []).find((lang: any) => String(lang.id) === String(languageId));
+    if (match?.name) return match.name;
+    return isLanguagesLoading ? "..." : "Unknown";
+  };
 
   const [formData, setFormData] = useState({
     language_id: 0,
@@ -280,7 +286,7 @@ export default function LessonsPage() {
                           <div className="flex items-center space-x-2">
                             <FiGlobe className="text-gray-400" size={14} />
                             <span className="text-sm text-gray-900 dark:text-white">
-                              ID: {lesson.language_id}
+                              {getLanguageName(lesson.language_id)}
                             </span>
                           </div>
                         </td>
@@ -355,7 +361,7 @@ export default function LessonsPage() {
                   <div className="flex items-center space-x-2 mb-3">
                     <FiGlobe className="text-gray-400" size={14} />
                     <span className="text-xs text-gray-500 dark:text-gray-400">
-                      Language ID: {lesson.language_id}
+                      {getLanguageName(lesson.language_id)}
                     </span>
                   </div>
                   <div className="flex gap-2">

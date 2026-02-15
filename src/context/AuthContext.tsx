@@ -27,6 +27,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
+  const isRefreshingSessionRef = React.useRef(false);
+
+  const refreshSession = React.useCallback(async (): Promise<boolean> => {
+    const refreshToken = sessionStorage.getItem('refresh_token');
+    if (!refreshToken) return false;
+
+    if (isRefreshingSessionRef.current) return true;
+    isRefreshingSessionRef.current = true;
+
+    try {
+      const refreshResponse = await apiClient.post<{
+        access_token: string;
+        refresh_token: string;
+        expires_in: number;
+      }>(
+        '/api/v1/auth/refresh',
+        { refresh_token: refreshToken }
+      );
+
+      const expiryTime = Date.now() + ((refreshResponse.data.expires_in || 3600) * 1000);
+      sessionStorage.setItem('access_token', refreshResponse.data.access_token);
+      sessionStorage.setItem('token_expiry', expiryTime.toString());
+      if (refreshResponse.data.refresh_token) {
+        sessionStorage.setItem('refresh_token', refreshResponse.data.refresh_token);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('❌ Silent token refresh failed:', error);
+      return false;
+    } finally {
+      isRefreshingSessionRef.current = false;
+    }
+  }, []);
+
   useEffect(() => {
     console.log('🔐 AUTH STATE CHANGED:', {
       isAuthenticated: !!user,
@@ -49,11 +84,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         // Check if token has expired
         if (tokenExpiry && Date.now() > parseInt(tokenExpiry)) {
-          console.log('⏰ Token expired, clearing session');
-          sessionStorage.clear();
-          document.cookie = 'user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-          setIsLoading(false);
-          return;
+          console.log('⏰ Token expired, attempting silent refresh');
+          // Refresh is async; we defer completion below.
         }
         
         // Validate both user data and token exist
@@ -74,14 +106,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     };
 
-    loadUser();
+    // Load user, and if needed attempt a silent refresh first.
+    (async () => {
+      try {
+        const tokenExpiry = sessionStorage.getItem('token_expiry');
+        if (tokenExpiry && Date.now() > parseInt(tokenExpiry)) {
+          const refreshed = await refreshSession();
+          if (!refreshed) {
+            console.log('⏰ Token expired and refresh failed, clearing session');
+            sessionStorage.clear();
+            document.cookie = 'user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+          }
+        }
+      } finally {
+        loadUser();
+      }
+    })();
 
     // Set up a periodic check for token expiry (every minute)
     const expiryCheckInterval = setInterval(() => {
       const tokenExpiry = sessionStorage.getItem('token_expiry');
-      if (tokenExpiry && Date.now() > parseInt(tokenExpiry)) {
-        console.log('⏰ Token expired during session, logging out');
-        logout();
+      if (!tokenExpiry) return;
+
+      const expiryMs = parseInt(tokenExpiry);
+      const remainingMs = expiryMs - Date.now();
+
+      // Refresh if the token is expired or will expire soon.
+      // This prevents idle sessions from being logged out purely client-side.
+      if (remainingMs <= 2 * 60 * 1000) {
+        (async () => {
+          const refreshed = await refreshSession();
+          if (!refreshed) {
+            console.log('⏰ Token refresh failed during session, logging out');
+            logout();
+          }
+        })();
       }
     }, 60000); // Check every minute
 

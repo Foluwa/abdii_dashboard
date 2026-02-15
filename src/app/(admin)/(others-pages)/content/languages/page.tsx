@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useLanguages } from "@/hooks/useApi";
 import { apiClient } from "@/lib/api";
 import type { Language } from "@/types/api";
@@ -18,6 +18,24 @@ export default function LanguagesPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
+
+  useEffect(() => {
+    if (!showModal) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showModal]);
+
+  useEffect(() => {
+    if (!showModal) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeModal();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showModal]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -214,7 +232,7 @@ export default function LanguagesPage() {
                     <div className="flex items-center justify-center space-x-1">
                       <FiUsers className="text-gray-400" size={14} />
                       <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                        {language.user_count || 0}
+                        {language.total_learners ?? language.user_count ?? 0}
                       </span>
                     </div>
                   </td>
@@ -310,7 +328,7 @@ export default function LanguagesPage() {
                 <div className="flex items-center justify-center space-x-1 mb-1">
                   <FiUsers className="text-gray-400" size={14} />
                   <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                    {language.user_count || 0}
+                    {language.total_learners ?? language.user_count ?? 0}
                   </span>
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">Learners</div>
@@ -349,8 +367,17 @@ export default function LanguagesPage() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full m-4">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) closeModal();
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full m-4 max-h-[90vh] overflow-y-auto"
+          >
             <div className="p-6 border-b border-gray-200 dark:border-gray-700">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                 {editingLanguage ? "Edit Language" : "Add Language"}
@@ -363,42 +390,42 @@ export default function LanguagesPage() {
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Language Name *
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   required
                   placeholder="e.g., Yoruba"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Native Name *
                 </label>
                 <input
                   type="text"
                   value={formData.native_name}
                   onChange={(e) => setFormData({ ...formData, native_name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   required
                   placeholder="e.g., Èdè Yorùbá"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   ISO 639-3 Code *
                 </label>
                 <input
                   type="text"
                   value={formData.iso_639_3}
                   onChange={(e) => setFormData({ ...formData, iso_639_3: e.target.value.toLowerCase() })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white uppercase"
+                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white uppercase"
                   required
                   maxLength={3}
                   placeholder="e.g., yor"
@@ -406,14 +433,14 @@ export default function LanguagesPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Flag Emoji
                 </label>
                 <input
                   type="text"
                   value={formData.flag_emoji}
                   onChange={(e) => setFormData({ ...formData, flag_emoji: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   placeholder="🇳🇬"
                 />
               </div>
@@ -434,12 +461,12 @@ export default function LanguagesPage() {
               <div className="flex items-center">
                 <input
                   type="checkbox"
-                  id="is_deleted"
+                  id="is_active"
                   checked={!formData.is_deleted}
                   onChange={(e) => setFormData({ ...formData, is_deleted: !e.target.checked })}
                   className="h-4 w-4 text-blue-600 rounded border-gray-300 dark:border-gray-600"
                 />
-                <label htmlFor="is_deleted" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                <label htmlFor="is_active" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                   Active (visible to users)
                 </label>
               </div>
