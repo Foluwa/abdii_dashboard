@@ -3,7 +3,7 @@
  */
 
 import '@testing-library/jest-dom';
-import React from 'react';
+import type { ReactNode } from 'react';
 
 // Mock Next.js router
 jest.mock('next/navigation', () => ({
@@ -19,8 +19,17 @@ jest.mock('next/navigation', () => ({
 
 // Mock next/link
 jest.mock('next/link', () => {
-  return ({ children, href }: { children: React.ReactNode; href: string }) => {
+  const React = require('react');
+  return ({ children, href }: { children: ReactNode; href: string }) => {
     return React.createElement('a', { href }, children);
+  };
+});
+
+// Mock next/image
+jest.mock('next/image', () => {
+  const React = require('react');
+  return ({ alt, ...props }: { alt?: string } & Record<string, unknown>) => {
+    return React.createElement('img', { alt: alt ?? '', ...props });
   };
 });
 

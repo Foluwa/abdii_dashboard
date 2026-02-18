@@ -459,6 +459,69 @@ export function useMonthlySubscriberGrowth(months: number = 12) {
   };
 }
 
+/**
+ * Geographic Distribution (Last-known)
+ * Returns all users grouped by users.country_code
+ */
+export function useGeoDistributionLastKnown(includeUnknown: boolean = true) {
+  const { data, error, mutate } = useSWR(
+    `/api/v1/admin/analytics/geo/last-known?include_unknown=${includeUnknown}`,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+
+  return {
+    data: data?.data || [],
+    total: data?.total || 0,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
+/**
+ * Geographic Distribution (Active users)
+ * Returns active users in last N days grouped by most recent derived country.
+ */
+export function useGeoDistributionActiveUsers(
+  windowDays: number = 30,
+  includeUnknown: boolean = true
+) {
+  const { data, error, mutate } = useSWR(
+    `/api/v1/admin/analytics/geo/active?window_days=${windowDays}&include_unknown=${includeUnknown}`,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+
+  return {
+    data: data?.data || [],
+    total: data?.total || 0,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
+/**
+ * Recent Activity (Phase 1)
+ * Unified feed from admin_audit_log + subscription_events.
+ */
+export function useRecentActivity(limit: number = 10, days: number = 30) {
+  const { data, error, mutate } = useSWR(
+    `/api/v1/admin/analytics/recent-activity?limit=${limit}&days=${days}`,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+
+  return {
+    data: data?.data || [],
+    total: data?.total || 0,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
 // =============================================================================
 // SUBSCRIPTIONS HOOKS
 // =============================================================================

@@ -11,6 +11,7 @@ import PlatformDistributionChart from "@/components/charts/PlatformDistributionC
 import MonthlySalesChart from "@/components/ecommerce/MonthlySalesChart";
 import MonthlySubscriberGrowthChart from "@/components/charts/MonthlySubscriberGrowthChart";
 import CountryMap from "@/components/ecommerce/CountryMap";
+import RecentActivityFeed from "@/components/dashboard/RecentActivityFeed";
 
 export default function Dashboard() {
   const { status, isLoading: statusLoading, isError: statusError } = useSystemStatus();
@@ -199,29 +200,37 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Customer Demographics Map */}
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
-        <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-3 dark:border-white/[0.05] dark:bg-white/[0.02]">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-            Customer Demographics
-          </h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            Geographic distribution of users worldwide
-          </p>
+      {/* Demographics + Recent Activity Row (70/30 on desktop) */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-10">
+        {/* Customer Demographics Map (70%) */}
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white lg:col-span-7 dark:border-white/[0.05] dark:bg-white/[0.03]">
+          <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-3 dark:border-white/[0.05] dark:bg-white/[0.02]">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+              Customer Demographics
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              Geographic distribution of users worldwide
+            </p>
+          </div>
+          <div className="p-5">
+            <CountryMap />
+          </div>
         </div>
-        <div className="p-5">
-          <CountryMap />
-        </div>
-      </div>
 
-      {/* Recent Activity - Placeholder */}
-      <div className="p-6 bg-white border border-gray-200 rounded-lg dark:bg-gray-900 dark:border-gray-800">
-        <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-          Recent Activity
-        </h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          Activity feed will be displayed here once user actions are tracked.
-        </p>
+        {/* Recent Activity (30%) */}
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white lg:col-span-3 dark:border-white/[0.05] dark:bg-white/[0.03]">
+          <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-3 dark:border-white/[0.05] dark:bg-white/[0.02]">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+              Recent Activity
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              Latest admin and subscription events
+            </p>
+          </div>
+          <div className="p-5">
+            <RecentActivityFeed />
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -10,7 +10,7 @@
  */
 
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import UsersPage from '@/app/(admin)/(others-pages)/users/page';
 
@@ -22,15 +22,17 @@ jest.mock('@/hooks/useApi', () => ({
   useUsers: (filters: unknown) => mockUseUsers(filters),
 }));
 
-// Mock the apiClient
-const mockApiClient = {
-  post: jest.fn(),
-  delete: jest.fn(),
-};
-
 jest.mock('@/lib/api', () => ({
-  apiClient: mockApiClient,
+  apiClient: {
+    post: jest.fn(),
+    delete: jest.fn(),
+  },
 }));
+
+const mockApiClient = jest.requireMock('@/lib/api').apiClient as {
+  post: jest.Mock;
+  delete: jest.Mock;
+};
 
 // Sample user data
 const sampleUsers = {
@@ -83,17 +85,20 @@ describe('UsersPage', () => {
     it('renders users table with correct columns', () => {
       render(<UsersPage />);
 
+      const table = screen.getByRole('table');
+      const tableQueries = within(table);
+
       // Check column headers
-      expect(screen.getByText('User')).toBeInTheDocument();
-      expect(screen.getByText('Email')).toBeInTheDocument();
-      expect(screen.getByText('Provider')).toBeInTheDocument();
-      expect(screen.getByText('XP')).toBeInTheDocument();
-      expect(screen.getByText('Role')).toBeInTheDocument();
-      expect(screen.getByText('Status')).toBeInTheDocument();
-      expect(screen.getByText('Actions')).toBeInTheDocument();
+      expect(tableQueries.getByText('User', { selector: 'th' })).toBeInTheDocument();
+      expect(tableQueries.getByText('Device', { selector: 'th' })).toBeInTheDocument();
+      expect(tableQueries.getByText('Last Login', { selector: 'th' })).toBeInTheDocument();
+      expect(tableQueries.getByText('XP', { selector: 'th' })).toBeInTheDocument();
+      expect(tableQueries.getByText('Role', { selector: 'th' })).toBeInTheDocument();
+      expect(tableQueries.getByText('Status', { selector: 'th' })).toBeInTheDocument();
+      expect(tableQueries.getByText('Actions', { selector: 'th' })).toBeInTheDocument();
 
       // Should NOT have Telegram column
-      expect(screen.queryByText('Telegram')).not.toBeInTheDocument();
+      expect(tableQueries.queryByText('Telegram')).not.toBeInTheDocument();
     });
 
     it('renders user data correctly', () => {
@@ -113,20 +118,27 @@ describe('UsersPage', () => {
     it('shows provider badges', () => {
       render(<UsersPage />);
 
-      expect(screen.getByText('Google')).toBeInTheDocument();
-      expect(screen.getByText('Apple')).toBeInTheDocument();
-      expect(screen.getByText('Device')).toBeInTheDocument();
+      const table = screen.getByRole('table');
+      const tableQueries = within(table);
+
+      expect(tableQueries.getByText('Google')).toBeInTheDocument();
+      expect(tableQueries.getByText('Apple')).toBeInTheDocument();
+      // Avoid collision with the "Device" column header
+      expect(tableQueries.getByText('Device', { selector: 'span' })).toBeInTheDocument();
     });
 
     it('shows status badges correctly', () => {
       render(<UsersPage />);
 
+      const table = screen.getByRole('table');
+      const tableQueries = within(table);
+
       // Active users should show "Active" badge
-      const activeBadges = screen.getAllByText('Active');
+      const activeBadges = tableQueries.getAllByText('Active');
       expect(activeBadges.length).toBe(2);
 
       // Inactive user should show "Inactive" badge
-      expect(screen.getByText('Inactive')).toBeInTheDocument();
+      expect(tableQueries.getByText('Inactive')).toBeInTheDocument();
     });
 
     it('shows loading spinner when loading', () => {
@@ -175,7 +187,9 @@ describe('UsersPage', () => {
       render(<UsersPage />);
 
       // Change status filter
-      const statusSelect = screen.getByLabelText('Status');
+      const statusLabel = screen.getByText('Status', { selector: 'label' });
+      const statusSelect = statusLabel.parentElement?.querySelector('select');
+      expect(statusSelect).toBeTruthy();
       await userEvent.selectOptions(statusSelect, 'active');
 
       // Check that useUsers was called with the filter
@@ -189,7 +203,9 @@ describe('UsersPage', () => {
     it('provider filter works', async () => {
       render(<UsersPage />);
 
-      const providerSelect = screen.getByLabelText('Provider');
+      const providerLabel = screen.getByText('Provider', { selector: 'label' });
+      const providerSelect = providerLabel.parentElement?.querySelector('select');
+      expect(providerSelect).toBeTruthy();
       await userEvent.selectOptions(providerSelect, 'google');
 
       expect(mockUseUsers).toHaveBeenCalledWith(
@@ -333,6 +349,10 @@ describe('UsersPage', () => {
 
       expect(screen.getByText('Previous')).toBeInTheDocument();
       expect(screen.getByText('Next')).toBeInTheDocument();
+
+      // Should show numbered page buttons
+      expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '2' })).toBeInTheDocument();
     });
 
     it('disables previous button on first page', () => {
@@ -359,8 +379,8 @@ describe('UsersPage', () => {
 
       render(<UsersPage />);
 
-      const nextBtn = screen.getByText('Next');
-      await userEvent.click(nextBtn);
+      const page2Btn = screen.getByRole('button', { name: '2' });
+      await userEvent.click(page2Btn);
 
       expect(mockUseUsers).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -377,7 +397,7 @@ describe('UsersPage', () => {
       expect(screen.getByText('All Users')).toBeInTheDocument();
       expect(screen.getByText('Admins')).toBeInTheDocument();
       expect(screen.getByText('Managers')).toBeInTheDocument();
-      expect(screen.getByText('Users')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Users' })).toBeInTheDocument();
     });
 
     it('clicking tab changes role filter', async () => {

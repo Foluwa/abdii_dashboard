@@ -8,6 +8,7 @@ import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Alert from "@/components/ui/alert/SimpleAlert";
 import StatusBadge from "@/components/admin/StatusBadge";
 import { StyledSelect } from "@/components/ui/form/StyledSelect";
+import Pagination from "@/components/tables/Pagination";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -53,6 +54,8 @@ export default function UsersPage() {
     min_xp: minXp ? parseInt(minXp) : undefined,
     max_xp: maxXp ? parseInt(maxXp) : undefined,
   });
+
+  const totalPages = users ? Math.max(1, Math.ceil(users.total / limit)) : 1;
 
   const tabs: { label: string; value: TabRole; count?: number }[] = [
     { label: "All Users", value: "all" },
@@ -511,28 +514,20 @@ export default function UsersPage() {
             </div>
 
             {/* Pagination */}
-            {users && users.total > limit && (
+            {users && totalPages > 1 && (
               <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-800">
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-gray-700 dark:text-gray-300">
                     Showing {(page - 1) * limit + 1} to {Math.min(page * limit, users.total)} of {users.total} users
                   </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setPage(page - 1)}
-                      disabled={page === 1}
-                      className="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
-                    >
-                      Previous
-                    </button>
-                    <button
-                      onClick={() => setPage(page + 1)}
-                      disabled={page * limit >= users.total}
-                      className="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
-                    >
-                      Next
-                    </button>
-                  </div>
+                  <Pagination
+                    currentPage={page}
+                    totalPages={totalPages}
+                    onPageChange={(nextPage) => {
+                      const clamped = Math.max(1, Math.min(totalPages, nextPage));
+                      setPage(clamped);
+                    }}
+                  />
                 </div>
               </div>
             )}
