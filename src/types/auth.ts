@@ -61,6 +61,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'content:create',
     'content:update',
     'content:delete',
+    'audio:read',
+    'audio:create',
+    'audio:update',
+    'audio:delete',
     'testing:access',
   ],
   manager: [
@@ -69,6 +73,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'content:create',
     'content:update',
     'content:delete',
+    'audio:read',
+    'audio:create',
+    'audio:update',
+    'audio:delete',
   ],
   user: [],
 };

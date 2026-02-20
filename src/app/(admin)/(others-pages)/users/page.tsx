@@ -10,7 +10,7 @@ import StatusBadge from "@/components/admin/StatusBadge";
 import { StyledSelect } from "@/components/ui/form/StyledSelect";
 import Pagination from "@/components/tables/Pagination";
 import Link from "next/link";
-import Image from "next/image";
+import { FaApple, FaGoogle, FaGlobe, FaMobileAlt } from "react-icons/fa";
 
 type TabRole = "all" | UserRole;
 type ActionType = "deactivate" | "reactivate" | "delete" | "purge";
@@ -152,15 +152,17 @@ export default function UsersPage() {
   };
 
   const getDeviceIcon = (platform: string | null) => {
+    const commonClassName = "h-5 w-5 text-gray-900 dark:text-white";
+
     switch (platform?.toLowerCase()) {
       case "ios":
-        return "🍎";
+        return <FaApple className={commonClassName} aria-label="Apple (iOS)" />;
       case "android":
-        return "🤖";
+        return <FaGoogle className={commonClassName} aria-label="Google (Android)" />;
       case "web":
-        return "🌐";
+        return <FaGlobe className={commonClassName} aria-label="Web" />;
       default:
-        return "📱";
+        return <FaMobileAlt className={commonClassName} aria-label="Device" />;
     }
   };
 
@@ -434,7 +436,7 @@ export default function UsersPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2">
-                            <span className="text-lg">{getDeviceIcon(user.device_platform)}</span>
+                            <span className="flex items-center">{getDeviceIcon(user.device_platform)}</span>
                             <div>
                               <div className="text-sm text-gray-900 dark:text-white">
                                 {user.device_platform ? user.device_platform.charAt(0).toUpperCase() + user.device_platform.slice(1) : "Unknown"}
