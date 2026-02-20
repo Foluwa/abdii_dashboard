@@ -81,6 +81,17 @@ const CountryMap: React.FC<CountryMapProps> = ({ mapColor }) => {
       className="h-[350px] w-full rounded-lg overflow-hidden"
       style={{ width: "100%", height: 350 }}
       backgroundColor="transparent"
+      onRegionTipShow={(_event: any, labelElement: any, regionCode: string) => {
+        const code = (regionCode || "").toUpperCase();
+        const count = regionValues[code] ?? 0;
+
+        const base = typeof labelElement?.html === "function" ? String(labelElement.html()) : code;
+        const countText = `${count.toLocaleString()} user${count === 1 ? "" : "s"}`;
+
+        if (typeof labelElement?.html === "function") {
+          labelElement.html(`${base}<br/>${countText}`);
+        }
+      }}
       markerStyle={
         {
           initial: {

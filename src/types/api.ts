@@ -97,6 +97,26 @@ export interface CronJob {
 }
 
 /**
+ * Billing / Subscription Types
+ */
+
+export type BillingPeriod = 'monthly' | 'annual' | string;
+
+export interface BillingPlan {
+  plan_id: string;
+  name: string;
+  description: string;
+  price_display: string;
+  billing_period: BillingPeriod;
+  features: string[];
+  apple_product_id: string;
+  google_product_id: string;
+  google_base_plan_id: string;
+  stripe_price_id?: string;
+  is_popular: boolean;
+}
+
+/**
  * User Management Types
  */
 

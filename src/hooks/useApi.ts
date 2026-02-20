@@ -17,6 +17,7 @@ import {
   UserListItem,
   UserDetail,
   Language,
+  BillingPlan,
   Lesson,
   Word,
   AlertLevel,
@@ -35,8 +36,36 @@ import {
 
 /**
  * Generic fetcher function for SWR
+
  */
 const fetcher = (url: string) => apiClient.get(url).then((res) => res.data);
+
+/**
+ * Billing Plans Hook
+ */
+export function useBillingPlans(countryCode?: string) {
+  const params = new URLSearchParams();
+  if (countryCode) params.set('country_code', countryCode);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+
+  const { data, error, mutate } = useSWR<BillingPlan[]>(
+    `/api/v1/billing/plans${suffix}`,
+    fetcher,
+    {
+      refreshInterval: 0,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      shouldRetryOnError: false,
+    }
+  );
+
+  return {
+    plans: data || [],
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
+}
 
 /**
  * System Status Hook

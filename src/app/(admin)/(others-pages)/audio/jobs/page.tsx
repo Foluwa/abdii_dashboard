@@ -23,7 +23,8 @@ interface AudioJob {
   error_message?: string;
   retry_count: number;
   max_retries: number;
-  created_at: string;
+  queued_at: string;
+  created_at?: string;
   started_at?: string;
   completed_at?: string;
 }
@@ -141,7 +142,22 @@ export default function AudioJobsPage() {
     return `${(bytes / 1024).toFixed(1)} KB`;
   };
 
+  const formatDateTime = (value?: string) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "-";
+    return date.toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   const totalPages = Math.ceil(total / limit);
+
+  const getQueuedAt = (job: AudioJob) => job.queued_at || job.created_at;
 
   return (
     <div className="p-6">
@@ -246,6 +262,9 @@ export default function AudioJobsPage() {
                       Provider
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                      Queued
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
                       Details
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
@@ -279,6 +298,9 @@ export default function AudioJobsPage() {
                         <span className="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
                           {job.provider}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                        {formatDateTime(getQueuedAt(job))}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                         {job.duration_seconds && <div>Duration: {formatDuration(job.duration_seconds)}</div>}

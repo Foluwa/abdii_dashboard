@@ -12,6 +12,7 @@ import MonthlySalesChart from "@/components/ecommerce/MonthlySalesChart";
 import MonthlySubscriberGrowthChart from "@/components/charts/MonthlySubscriberGrowthChart";
 import CountryMap from "@/components/ecommerce/CountryMap";
 import RecentActivityFeed from "@/components/dashboard/RecentActivityFeed";
+import BillingPlansCard from "@/components/billing/BillingPlansCard";
 
 export default function Dashboard() {
   const { status, isLoading: statusLoading, isError: statusError } = useSystemStatus();
@@ -151,6 +152,9 @@ export default function Dashboard() {
           </a>
         </div>
       </div>
+
+      {/* Billing Plans */}
+      <BillingPlansCard />
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
