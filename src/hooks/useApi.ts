@@ -22,7 +22,7 @@ import {
   AlertLevel,
   AlertCategory,
   Proverb,
-  AlertHistoryItem,
+  AlertHistoryResponse,
   ConfigEntry,
   AppSetting,
   PaginatedResponse,
@@ -227,7 +227,7 @@ export function useAlertHistory(filters?: AlertFilters) {
 
   const url = `/api/v1/admin/history?${params.toString()}`;
 
-  const { data, error, mutate } = useSWR(url, fetcher, {
+  const { data, error, mutate } = useSWR<AlertHistoryResponse>(url, fetcher, {
     refreshInterval: 60000, // 60 seconds
   });
 

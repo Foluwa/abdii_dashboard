@@ -12,8 +12,8 @@ interface ConfigItem {
   key: string;
   value_type: string;
   value_int?: number | null;
-  value_boolean?: boolean | null;
-  value_string?: string | null;
+  value_bool?: boolean | null;
+  value_text?: string | null;
   value_float?: number | null;
   description?: string;
   category?: string;
@@ -34,17 +34,23 @@ export default function ConfigPage() {
 
   const getActualValue = (item: ConfigItem) => {
     switch (item.value_type) {
-      case "int": return item.value_int;
-      case "boolean": return item.value_boolean;
-      case "string": return item.value_string;
-      case "float": return item.value_float;
-      default: return item.value_string;
+      case "int":
+        return item.value_int ?? null;
+      case "boolean":
+        return item.value_bool ?? null;
+      case "string":
+        return item.value_text ?? null;
+      case "float":
+        return item.value_float ?? null;
+      default:
+        return item.value_text ?? null;
     }
   };
 
   const startEdit = (item: ConfigItem) => {
     setEditingKey(item.key);
-    setEditValue(getActualValue(item));
+    const actualValue = getActualValue(item);
+    setEditValue(actualValue ?? (item.value_type === "boolean" ? false : ""));
     setEditDescription(item.description || "");
     setErrorMessage("");
   };
@@ -67,16 +73,16 @@ export default function ConfigPage() {
       
       switch (valueType) {
         case "int":
-          payload.value_int = parseInt(editValue);
+          payload.value_int = editValue === "" || editValue == null ? null : parseInt(editValue);
           break;
         case "boolean":
-          payload.value_boolean = editValue === true || editValue === "true";
+          payload.value_bool = editValue === true || editValue === "true";
           break;
         case "string":
-          payload.value_string = editValue;
+          payload.value_text = editValue ?? "";
           break;
         case "float":
-          payload.value_float = parseFloat(editValue);
+          payload.value_float = editValue === "" || editValue == null ? null : parseFloat(editValue);
           break;
       }
 
@@ -227,7 +233,7 @@ export default function ConfigPage() {
                           <div className="space-y-2">
                             {item.value_type === "boolean" ? (
                               <select
-                                value={editValue.toString()}
+                                value={String(editValue ?? false)}
                                 onChange={(e) => setEditValue(e.target.value === "true")}
                                 className="w-full px-3 py-1 text-sm border border-gray-300 rounded dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                               >
@@ -238,20 +244,31 @@ export default function ConfigPage() {
                               <input
                                 type={item.value_type === "int" || item.value_type === "float" ? "number" : "text"}
                                 step={item.value_type === "float" ? "0.1" : "1"}
-                                value={editValue}
+                                value={editValue ?? ""}
                                 onChange={(e) => setEditValue(e.target.value)}
                                 className="w-full px-3 py-1 text-sm border border-gray-300 rounded dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                               />
                             )}
                           </div>
                         ) : (
-                          <span className={`text-sm font-semibold ${
-                            item.value_type === "boolean" 
-                              ? getActualValue(item) ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
-                              : "text-gray-900 dark:text-white"
-                          }`}>
-                            {String(getActualValue(item))}
-                          </span>
+                          (() => {
+                            const actualValue = getActualValue(item);
+                            if (actualValue == null) {
+                              return (
+                                <span className="text-sm font-semibold text-gray-400 dark:text-gray-500">—</span>
+                              );
+                            }
+
+                            return (
+                              <span className={`text-sm font-semibold ${
+                                item.value_type === "boolean" 
+                                  ? actualValue ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+                                  : "text-gray-900 dark:text-white"
+                              }`}>
+                                {String(actualValue)}
+                              </span>
+                            );
+                          })()
                         )}
                       </td>
                       <td className="px-4 py-4 max-w-xs">
@@ -377,10 +394,10 @@ function CreateConfigModal({ onClose, onSuccess }: { onClose: () => void; onSucc
           payload.value_float = parseFloat(formData.value);
           break;
         case "boolean":
-          payload.value_boolean = formData.value === "true";
+          payload.value_bool = formData.value === "true";
           break;
         case "string":
-          payload.value_string = formData.value;
+          payload.value_text = formData.value;
           break;
       }
 

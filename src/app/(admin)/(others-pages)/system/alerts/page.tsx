@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useAlertHistory } from "@/hooks/useApi";
-import type { AlertLevel, AlertCategory } from "@/types/api";
+import type { AlertLevel, AlertCategory, AlertHistoryItem } from "@/types/api";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Alert from "@/components/ui/alert/SimpleAlert";
 import StatusBadge from "@/components/admin/StatusBadge";
@@ -15,6 +15,8 @@ export default function AlertsPage() {
   const limit = 50;
 
   const { alerts, isLoading, isError } = useAlertHistory({ level, category, page, limit });
+  const items = alerts?.items ?? [];
+  const total = alerts?.total ?? 0;
 
   const getLevelBadgeStatus = (alertLevel: AlertLevel) => {
     switch (alertLevel) {
@@ -31,8 +33,32 @@ export default function AlertsPage() {
     }
   };
 
-  const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString();
+  const parseApiTimestamp = (timestamp?: string | null) => {
+    if (!timestamp) return null;
+
+    // FastAPI commonly returns microseconds (6 digits). JS Date only supports milliseconds.
+    // Also, when no timezone is included, treat it as UTC for consistent display.
+    let normalized = timestamp.replace(/(\.\d{3})\d+/, "$1");
+    const hasTimezone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(normalized);
+    if (!hasTimezone) normalized = `${normalized}Z`;
+
+    const date = new Date(normalized);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+
+  const formatTimestamp = (timestamp?: string | null) => {
+    const date = parseApiTimestamp(timestamp);
+    return date ? date.toLocaleString() : "—";
+  };
+
+  const formatMessageHtml = (message: string) => {
+    let html = message || "";
+    html = html.replace(/\n/g, "<br/>");
+    // Basic hardening (admin-only content, but avoid obvious XSS vectors)
+    html = html.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "");
+    html = html.replace(/\son\w+=("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+    html = html.replace(/javascript:/gi, "");
+    return html;
   };
 
   if (isLoading) {
@@ -127,33 +153,31 @@ export default function AlertsPage() {
 
       {/* Alerts List */}
       <div className="bg-white border border-gray-200 rounded-lg dark:bg-gray-900 dark:border-gray-800">
-        {alerts && alerts.length > 0 ? (
+        {items.length > 0 ? (
           <div className="divide-y divide-gray-200 dark:divide-gray-800">
-            {alerts.map((alert: any) => (
+            {items.map((alert: any) => (
               <div key={alert.id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
-                      <StatusBadge status={getLevelBadgeStatus(alert.level)} label={alert.level} />
+                      <StatusBadge status={getLevelBadgeStatus(alert.alert_level)} label={alert.alert_level} />
                       <span className="px-2 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded dark:bg-gray-800 dark:text-gray-300">
-                        {alert.category}
+                        {alert.alert_category}
                       </span>
-                      {alert.sent && (
+                      {alert.sent_successfully && (
                         <span className="px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded dark:bg-green-900 dark:text-green-300">
                           Sent
                         </span>
                       )}
                     </div>
-                    <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-1">
-                      {alert.title}
-                    </h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {alert.message}
-                    </p>
+                    <div
+                      className="text-sm text-gray-600 dark:text-gray-400"
+                      dangerouslySetInnerHTML={{ __html: formatMessageHtml(alert.message) }}
+                    />
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {formatTimestamp(alert.timestamp)}
+                      {formatTimestamp(alert.sent_at)}
                     </p>
                   </div>
                 </div>
@@ -167,11 +191,11 @@ export default function AlertsPage() {
         )}
 
         {/* Pagination */}
-        {alerts && alerts.total > limit && (
+        {total > limit && (
           <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-800">
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-700 dark:text-gray-300">
-                Showing {(page - 1) * limit + 1} to {Math.min(page * limit, alerts.total)} of {alerts.total} alerts
+                Showing {(page - 1) * limit + 1} to {Math.min(page * limit, total)} of {total} alerts
               </p>
               <div className="flex gap-2">
                 <button
@@ -183,7 +207,7 @@ export default function AlertsPage() {
                 </button>
                 <button
                   onClick={() => setPage(page + 1)}
-                  disabled={page * limit >= alerts.total}
+                  disabled={page * limit >= total}
                   className="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
                 >
                   Next

@@ -5,6 +5,7 @@ import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import { useLanguages } from "@/hooks/useApi";
 import { apiClient } from "@/lib/api";
 import { Language } from "@/types/api";
+import Alert from "@/components/ui/alert/SimpleAlert";
 
 interface NumbersAvailability {
   min_available: number;
@@ -119,9 +120,9 @@ export default function LanguageSettingsPage() {
     return (
       <div className="p-6">
         <PageBreadCrumb pageTitle="Language Practice Settings" />
-        <div className="rounded-lg bg-red-50 dark:bg-red-900/20 p-4 text-red-700 dark:text-red-400">
-          Failed to load languages. Please check your API connection.
-        </div>
+          <Alert variant="error">
+            Failed to load languages. Please check your API connection.
+          </Alert>
       </div>
     );
   }

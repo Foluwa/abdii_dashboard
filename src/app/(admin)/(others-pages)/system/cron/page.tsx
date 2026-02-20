@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { apiClient } from "@/lib/api";
+import Alert from "@/components/ui/alert/SimpleAlert";
 
 interface CronJob {
   name: string;
@@ -114,9 +115,9 @@ export default function CronJobsPage() {
       <PageBreadcrumb pageTitle="Cron Jobs" />
 
       {error && (
-        <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-          <p className="text-red-800 dark:text-red-200">{error}</p>
-        </div>
+        <Alert variant="error" className="mb-6">
+          {error}
+        </Alert>
       )}
 
       {data && (

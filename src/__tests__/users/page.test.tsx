@@ -10,9 +10,11 @@
  */
 
 import React from 'react';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import UsersPage from '@/app/(admin)/(others-pages)/users/page';
+
+import { renderWithProviders as render } from '@/test-utils';
 
 // Mock the useUsers hook
 const mockRefresh = jest.fn();

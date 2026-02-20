@@ -70,7 +70,12 @@ export default function VoicesPage() {
 
       const response = await apiClient.get(url);
       const data = response.data;
-      setVoices(data.items || []);
+      const normalizedItems: Voice[] = (data.items || []).map((v: any) => ({
+        ...v,
+        style_tags: Array.isArray(v?.style_tags) ? v.style_tags : [],
+        provider_metadata: v?.provider_metadata ?? {},
+      }));
+      setVoices(normalizedItems);
       setTotal(data.total || 0);
     } catch (err: any) {
       setError(err.response?.data?.detail || "Failed to load voices");

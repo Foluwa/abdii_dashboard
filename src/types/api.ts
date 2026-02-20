@@ -49,12 +49,21 @@ export type AlertCategory = 'telegram' | 'system' | 'resource' | 'error';
 
 export interface AlertHistoryItem {
   id: number;
-  level: AlertLevel;
-  category: AlertCategory;
-  title: string;
+  alert_level: AlertLevel;
+  alert_category: AlertCategory;
   message: string;
-  timestamp: string;
-  sent: boolean;
+  metadata: Record<string, any> | null;
+  sent_at: string;
+  sent_successfully: boolean;
+  error_message: string | null;
+}
+
+export interface AlertHistoryResponse {
+  items: AlertHistoryItem[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
 }
 
 export interface AlertFilters {

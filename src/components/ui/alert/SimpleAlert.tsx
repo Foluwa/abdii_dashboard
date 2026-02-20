@@ -1,4 +1,7 @@
-import React from "react";
+"use client";
+
+import React, { useEffect, useMemo, useRef } from "react";
+import { useToast } from "@/contexts/ToastContext";
 
 interface SimpleAlertProps {
   variant: "success" | "error" | "warning" | "info";
@@ -6,19 +9,36 @@ interface SimpleAlertProps {
   className?: string;
 }
 
-const SimpleAlert: React.FC<SimpleAlertProps> = ({ variant, children, className = "" }) => {
-  const variantStyles = {
-    success: "bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-300",
-    error: "bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300",
-    warning: "bg-yellow-50 border-yellow-200 text-yellow-800 dark:bg-yellow-900/20 dark:border-yellow-800 dark:text-yellow-300",
-    info: "bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300",
-  };
+const SimpleAlert: React.FC<SimpleAlertProps> = (props) => {
+  const { variant, children } = props;
+  const toast = useToast();
 
-  return (
-    <div className={`p-4 border rounded-lg ${variantStyles[variant]} ${className}`}>
-      {children}
-    </div>
-  );
+  const message = useMemo(() => {
+    const toText = (node: React.ReactNode): string => {
+      if (node == null || typeof node === "boolean") return "";
+      if (typeof node === "string" || typeof node === "number") return String(node);
+      if (Array.isArray(node)) return node.map(toText).filter(Boolean).join(" ");
+      if (React.isValidElement(node)) return toText((node.props as any)?.children);
+      return "";
+    };
+
+    return toText(children).trim();
+  }, [children]);
+
+  const lastToastKeyRef = useRef<string>("");
+
+  useEffect(() => {
+    if (!message) return;
+    const toastKey = `${variant}:${message}`;
+    if (lastToastKeyRef.current === toastKey) return;
+    lastToastKeyRef.current = toastKey;
+
+    if (variant === "success") toast.success(message);
+    else if (variant === "error") toast.error(message);
+    else toast.info(message); // Treat warning/info as info toasts
+  }, [message, toast, variant]);
+
+  return null;
 };
 
 export default SimpleAlert;
