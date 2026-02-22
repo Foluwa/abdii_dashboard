@@ -17,6 +17,8 @@ interface Word {
   lemma_normalized: string;
   pos: string;
   language_id: string;
+  language_name?: string | null;
+  language_code?: string | null;
   audio_key: string | null;
   audio_url?: string | null;
   audio_duration_sec: number | null;
@@ -219,6 +221,12 @@ export default function WordsDataTable({
                         <span className="text-lg font-semibold text-gray-900 dark:text-white">
                           {word.word}
                         </span>
+                        {(word.language_name || word.language_code) && (
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {word.language_name || 'Language'}
+                            {word.language_code ? ` (${word.language_code})` : ''}
+                          </span>
+                        )}
                         {word.lemma_normalized !== word.word.toLowerCase() && (
                           <span className="text-xs text-gray-500 dark:text-gray-400">
                             Normalized: {word.lemma_normalized}

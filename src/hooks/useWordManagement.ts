@@ -32,6 +32,7 @@ export interface WordDetail {
     pos: string;
     language_id: string;
     language_name: string;
+    language_code?: string;
     word_category: string | null;
     difficulty_level: number | null;
     usage_notes: string | null;
@@ -44,7 +45,7 @@ export interface WordDetail {
     usage_notes: string | null;
     glosses: Array<{
       id: string;
-      text: string;
+      definition: string;
       gloss_index: number;
       language_id: string;
       language_name: string;
@@ -53,23 +54,25 @@ export interface WordDetail {
   examples: Array<{
     id: string;
     sense_id: string;
-    text: string;
-    translation_text: string;
+    example_yoruba: string;
+    example_english: string;
     translation_language_id: string;
     translation_language_name: string;
-    audio_url: string | null;
+    audio_url?: string | null;
     created_at: string;
   }>;
-  audio: Array<{
+  audio_files: Array<{
     id: string;
     s3_bucket_key: string;
-    audio_url: string;
-    audio_duration_sec: number | null;
-    audio_quality_score: number | null;
-    tts_provider: string;
-    voice_name: string;
+    audio_url: string | null;
+    duration_sec: number | null;
+    quality_score: number | null;
+    provider: string;
+    voice_name: string | null;
     human_recorded: boolean;
     reviewed_at: string | null;
+    created_at: string;
+    updated_at: string;
   }>;
   pronunciations: Array<{
     id: string;
@@ -210,15 +213,27 @@ export function useExampleGeneration() {
   const generateExamples = async (wordId: string, count: number = 2) => {
     setIsGenerating(true);
     try {
+      const includePrompt = process.env.NEXT_PUBLIC_AI_PROMPT_DEBUG === '1';
       const response = await apiClient.post(
         `/api/v1/admin/content/words/${wordId}/generate-examples`,
-        { count }
+        { count, include_prompt: includePrompt }
       );
 
       const data = response.data;
       
       if (data.success) {
         toast.success(`Generated ${data.count} examples`);
+      }
+
+      if (includePrompt && (data.prompt || data.messages)) {
+        // eslint-disable-next-line no-console
+        console.groupCollapsed('[AI] generate-examples prompt');
+        // eslint-disable-next-line no-console
+        if (data.prompt) console.log(data.prompt);
+        // eslint-disable-next-line no-console
+        if (data.messages) console.log('messages:', data.messages);
+        // eslint-disable-next-line no-console
+        console.groupEnd();
       }
 
       return data.examples;

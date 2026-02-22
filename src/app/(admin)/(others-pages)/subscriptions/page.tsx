@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { apiClient } from "@/lib/api";
+import Alert from "@/components/ui/alert/SimpleAlert";
 import {
   useSubscriptions,
   useSubscriptionAttempts,
@@ -8,19 +10,24 @@ import {
   useSubscriptionStats,
 } from "@/hooks/useApi";
 
-type SubscriptionStatus = "active" | "canceled" | "expired" | "trial" | "";
-type SubscriptionProvider = "apple" | "google" | "stripe" | "";
+type SubscriptionStatus = "active" | "trialing" | "past_due" | "canceled" | "expired" | "";
+type SubscriptionProvider = "apple" | "google" | "stripe" | "manual" | "";
 
 interface Subscription {
   id: string;
   user_id: string;
   user_email: string | null;
+  user_display_name?: string | null;
   plan_id: string | null;
   status: string;
   provider: string;
   platform: string;
-  start_date: string | null;
-  end_date: string | null;
+  trial_end?: string | null;
+  current_period_start: string;
+  current_period_end: string;
+  cancel_at_period_end?: boolean;
+  canceled_at?: string | null;
+  auto_renew_enabled?: boolean | null;
 }
 
 interface SubscriptionEvent {
@@ -58,7 +65,40 @@ export default function SubscriptionsPage() {
   const [userSearch, setUserSearch] = useState("");
   const limit = 20;
 
-  const { subscriptions, total, isLoading, isError } = useSubscriptions({
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createSaving, setCreateSaving] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createUserQ, setCreateUserQ] = useState("");
+  const [createUserSuggestionsOpen, setCreateUserSuggestionsOpen] = useState(false);
+  const [createUserSuggestionsLoading, setCreateUserSuggestionsLoading] = useState(false);
+  const [createUserSuggestions, setCreateUserSuggestions] = useState<
+    Array<{ id: string; email: string | null; display_name: string | null; role?: string }>
+  >([]);
+  const createUserSuggestReqIdRef = useRef(0);
+  const [createPlanId, setCreatePlanId] = useState("");
+  const [createStatus, setCreateStatus] = useState<SubscriptionStatus>("active");
+  const [createStart, setCreateStart] = useState("");
+  const [createEnd, setCreateEnd] = useState("");
+  const [createReason, setCreateReason] = useState("");
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSub, setEditSub] = useState<Subscription | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editReason, setEditReason] = useState("");
+
+  const [editPlanId, setEditPlanId] = useState<string>("");
+  const [editStatus, setEditStatus] = useState<string>("");
+  const [editStart, setEditStart] = useState<string>("");
+  const [editEnd, setEditEnd] = useState<string>("");
+
+  const {
+    subscriptions,
+    total,
+    isLoading,
+    isError,
+    refresh: refreshSubscriptions,
+  } = useSubscriptions({
     page,
     limit,
     status: status || undefined,
@@ -66,7 +106,11 @@ export default function SubscriptionsPage() {
     search: userSearch || undefined,
   });
 
-  const { stats, isLoading: statsLoading } = useSubscriptionStats({
+  const {
+    stats,
+    isLoading: statsLoading,
+    refresh: refreshStats,
+  } = useSubscriptionStats({
     user_q: userSearch || undefined,
   });
 
@@ -74,6 +118,7 @@ export default function SubscriptionsPage() {
     events,
     isLoading: eventsLoading,
     isError: eventsError,
+    refresh: refreshEvents,
   } = useSubscriptionEvents({
     page: 1,
     limit: 20,
@@ -86,6 +131,7 @@ export default function SubscriptionsPage() {
     attempts,
     isLoading: attemptsLoading,
     isError: attemptsError,
+    refresh: refreshAttempts,
   } = useSubscriptionAttempts({
     page: 1,
     limit: 20,
@@ -103,12 +149,199 @@ export default function SubscriptionsPage() {
     });
   };
 
+  const toDatetimeLocalValue = (iso: string | null | undefined) => {
+    if (!iso) return "";
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const yyyy = date.getFullYear();
+    const mm = pad(date.getMonth() + 1);
+    const dd = pad(date.getDate());
+    const hh = pad(date.getHours());
+    const min = pad(date.getMinutes());
+    return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+  };
+
+  const openCreate = () => {
+    setCreateError(null);
+    setCreateSaving(false);
+    setCreateUserQ("");
+    setCreateUserSuggestionsOpen(false);
+    setCreateUserSuggestionsLoading(false);
+    setCreateUserSuggestions([]);
+    setCreatePlanId("");
+    setCreateStatus("active");
+    setCreateStart("");
+    setCreateEnd("");
+    setCreateReason("");
+    setCreateOpen(true);
+  };
+
+  const closeCreate = () => {
+    if (createSaving) return;
+    setCreateOpen(false);
+    setCreateError(null);
+    setCreateUserSuggestionsOpen(false);
+  };
+
+  useEffect(() => {
+    if (!createOpen) return;
+
+    const q = createUserQ.trim();
+    const uuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q);
+    if (!q || q.length < 2 || uuidLike) {
+      setCreateUserSuggestions([]);
+      setCreateUserSuggestionsLoading(false);
+      setCreateUserSuggestionsOpen(false);
+      return;
+    }
+
+    const myReqId = ++createUserSuggestReqIdRef.current;
+    setCreateUserSuggestionsLoading(true);
+
+    const handle = window.setTimeout(async () => {
+      try {
+        const params = new URLSearchParams();
+        params.set("limit", "8");
+        params.set("offset", "0");
+        params.set("search", q);
+
+        const res = await apiClient.get(`/api/v1/admin/users?${params.toString()}`);
+        if (createUserSuggestReqIdRef.current !== myReqId) return;
+
+        const users = (res?.data?.users || []) as Array<any>;
+        const suggestions = users.map((u) => ({
+          id: String(u.id),
+          email: u.email ?? null,
+          display_name: u.display_name ?? null,
+          role: u.role,
+        }));
+
+        setCreateUserSuggestions(suggestions);
+        setCreateUserSuggestionsOpen(true);
+      } catch {
+        if (createUserSuggestReqIdRef.current !== myReqId) return;
+        setCreateUserSuggestions([]);
+        setCreateUserSuggestionsOpen(false);
+      } finally {
+        if (createUserSuggestReqIdRef.current !== myReqId) return;
+        setCreateUserSuggestionsLoading(false);
+      }
+    }, 250);
+
+    return () => window.clearTimeout(handle);
+  }, [createOpen, createUserQ]);
+
+  const saveCreate = async () => {
+    if (!createUserQ.trim()) {
+      setCreateError("User (id or email) is required.");
+      return;
+    }
+    if (!createPlanId.trim()) {
+      setCreateError("Plan ID is required.");
+      return;
+    }
+    if (!createReason.trim()) {
+      setCreateError("Reason is required.");
+      return;
+    }
+    if (!createStart || !createEnd) {
+      setCreateError("Start and Expires are required.");
+      return;
+    }
+
+    setCreateSaving(true);
+    setCreateError(null);
+
+    try {
+      await apiClient.post("/api/v1/admin/subscriptions/manual", {
+        user_q: createUserQ.trim(),
+        plan_id: createPlanId.trim(),
+        status: createStatus || "active",
+        current_period_start: new Date(createStart).toISOString(),
+        current_period_end: new Date(createEnd).toISOString(),
+        reason: createReason.trim(),
+      });
+
+      await Promise.all([
+        refreshSubscriptions(),
+        refreshStats(),
+        refreshEvents(),
+        refreshAttempts(),
+      ]);
+
+      setCreateOpen(false);
+    } catch (err: any) {
+      setCreateError(err?.response?.data?.detail || err?.message || "Failed to create manual subscription");
+    } finally {
+      setCreateSaving(false);
+    }
+  };
+
+  const openEdit = (sub: Subscription) => {
+    setEditError(null);
+    setEditReason("");
+    setEditSub(sub);
+    setEditPlanId(sub.plan_id || "");
+    setEditStatus(sub.status || "");
+    setEditStart(toDatetimeLocalValue(sub.current_period_start));
+    setEditEnd(toDatetimeLocalValue(sub.current_period_end));
+    setEditOpen(true);
+  };
+
+  const closeEdit = () => {
+    if (editSaving) return;
+    setEditOpen(false);
+    setEditSub(null);
+    setEditError(null);
+  };
+
+  const saveEdit = async () => {
+    if (!editSub) return;
+    if (!editReason.trim()) {
+      setEditError("Reason is required.");
+      return;
+    }
+    setEditSaving(true);
+    setEditError(null);
+
+    try {
+      const body: any = {
+        reason: editReason.trim(),
+      };
+
+      if (editPlanId.trim()) body.plan_id = editPlanId.trim();
+      if (editStatus) body.status = editStatus;
+      if (editStart) body.current_period_start = new Date(editStart).toISOString();
+      if (editEnd) body.current_period_end = new Date(editEnd).toISOString();
+
+      await apiClient.patch(`/api/v1/admin/subscriptions/${editSub.id}`, body);
+
+      // Refresh list + related panels
+      await Promise.all([
+        refreshSubscriptions(),
+        refreshStats(),
+        refreshEvents(),
+        refreshAttempts(),
+      ]);
+
+      setEditOpen(false);
+      setEditSub(null);
+    } catch (err: any) {
+      setEditError(err?.response?.data?.detail || err?.message || "Failed to update subscription");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case "active":
         return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
-      case "trial":
+      case "trialing":
         return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400";
+      case "past_due":
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400";
       case "canceled":
         return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400";
       case "expired":
@@ -126,6 +359,8 @@ export default function SubscriptionsPage() {
         return "🤖";
       case "stripe":
         return "💳";
+      case "manual":
+        return "🛠️";
       default:
         return "📱";
     }
@@ -144,14 +379,283 @@ export default function SubscriptionsPage() {
 
   return (
     <div className="p-6">
+      {/* Create Modal */}
+      {createOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-2xl rounded-lg bg-white dark:bg-gray-800 shadow-lg">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Add Manual Subscription</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Grant premium manually (no payment charge)
+                </p>
+              </div>
+              <button
+                onClick={closeCreate}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="px-6 py-4 space-y-4">
+              {createError && (
+                <Alert variant="error">{createError}</Alert>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  User (ID or email)
+                </label>
+                <div className="relative">
+                  <input
+                    value={createUserQ}
+                    onChange={(e) => {
+                      setCreateUserQ(e.target.value);
+                      setCreateError(null);
+                    }}
+                    onFocus={() => {
+                      if (createUserSuggestions.length > 0) setCreateUserSuggestionsOpen(true);
+                    }}
+                    onBlur={() => {
+                      window.setTimeout(() => setCreateUserSuggestionsOpen(false), 150);
+                    }}
+                    placeholder="Type email or name to search"
+                    className="block w-full h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  />
+
+                  {createUserSuggestionsLoading && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 dark:text-gray-400">
+                      Searching…
+                    </div>
+                  )}
+
+                  {createUserSuggestionsOpen && createUserSuggestions.length > 0 && (
+                    <div className="absolute z-50 mt-1 w-full rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg overflow-hidden">
+                      {createUserSuggestions.map((u) => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => {
+                            setCreateUserQ(u.email || u.id);
+                            setCreateUserSuggestionsOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700"
+                        >
+                          <div className="text-sm text-gray-900 dark:text-white">
+                            {u.email || "(no email)"}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {u.display_name ? `${u.display_name} • ` : ""}
+                            {u.id.slice(0, 8)}…
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Plan ID</label>
+                  <input
+                    value={createPlanId}
+                    onChange={(e) => setCreatePlanId(e.target.value)}
+                    placeholder="premium_monthly"
+                    className="block w-full h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                  <select
+                    value={createStatus}
+                    onChange={(e) => setCreateStatus(e.target.value as SubscriptionStatus)}
+                    className="block w-full h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="active">active</option>
+                    <option value="trialing">trialing</option>
+                    <option value="past_due">past_due</option>
+                    <option value="canceled">canceled</option>
+                    <option value="expired">expired</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start</label>
+                  <input
+                    type="datetime-local"
+                    value={createStart}
+                    onChange={(e) => setCreateStart(e.target.value)}
+                    className="block w-full h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expires</label>
+                  <input
+                    type="datetime-local"
+                    value={createEnd}
+                    onChange={(e) => setCreateEnd(e.target.value)}
+                    className="block w-full h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reason (required)</label>
+                <textarea
+                  value={createReason}
+                  onChange={(e) => setCreateReason(e.target.value)}
+                  rows={3}
+                  placeholder="e.g., Manual premium grant for QA"
+                  className="block w-full px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-2">
+              <button
+                onClick={closeCreate}
+                disabled={createSaving}
+                className="px-4 py-2 text-sm rounded-md border border-gray-300 dark:border-gray-600 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveCreate}
+                disabled={createSaving}
+                className="px-4 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {createSaving ? "Creating..." : "Create"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editOpen && editSub && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-2xl rounded-lg bg-white dark:bg-gray-800 shadow-lg">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Edit Subscription</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {editSub.user_email || editSub.user_id}
+                </p>
+              </div>
+              <button
+                onClick={closeEdit}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="px-6 py-4 space-y-4">
+              {editError && (
+                <Alert variant="error">{editError}</Alert>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Plan ID</label>
+                  <input
+                    value={editPlanId}
+                    onChange={(e) => setEditPlanId(e.target.value)}
+                    placeholder="premium_monthly"
+                    className="block w-full h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value)}
+                    className="block w-full h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="active">active</option>
+                    <option value="trialing">trialing</option>
+                    <option value="past_due">past_due</option>
+                    <option value="canceled">canceled</option>
+                    <option value="expired">expired</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start</label>
+                  <input
+                    type="datetime-local"
+                    value={editStart}
+                    onChange={(e) => setEditStart(e.target.value)}
+                    className="block w-full h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expires</label>
+                  <input
+                    type="datetime-local"
+                    value={editEnd}
+                    onChange={(e) => setEditEnd(e.target.value)}
+                    className="block w-full h-11 px-3 rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reason (required)</label>
+                <textarea
+                  value={editReason}
+                  onChange={(e) => setEditReason(e.target.value)}
+                  rows={3}
+                  placeholder="e.g., Manual override for testing payment failure"
+                  className="block w-full px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-2">
+              <button
+                onClick={closeEdit}
+                disabled={editSaving}
+                className="px-4 py-2 text-sm rounded-md border border-gray-300 dark:border-gray-600 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveEdit}
+                disabled={editSaving}
+                className="px-4 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {editSaving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-          Subscription Management
-        </h1>
-        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          View and manage user subscriptions
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
+            Subscription Management
+          </h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            View and manage user subscriptions
+          </p>
+        </div>
+        <button
+          onClick={openCreate}
+          className="h-11 px-4 rounded-md bg-blue-600 text-white hover:bg-blue-700"
+        >
+          Add Manual Subscription
+        </button>
       </div>
 
       {/* Stats Cards */}
@@ -253,7 +757,8 @@ export default function SubscriptionsPage() {
             >
               <option value="">All Statuses</option>
               <option value="active">Active</option>
-              <option value="trial">Trial</option>
+              <option value="trialing">Trialing</option>
+              <option value="past_due">Past Due</option>
               <option value="canceled">Canceled</option>
               <option value="expired">Expired</option>
             </select>
@@ -275,6 +780,7 @@ export default function SubscriptionsPage() {
               <option value="apple">Apple</option>
               <option value="google">Google</option>
               <option value="stripe">Stripe</option>
+              <option value="manual">Manual</option>
             </select>
           </div>
         </div>
@@ -312,7 +818,7 @@ export default function SubscriptionsPage() {
                       Start Date
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                      End Date
+                      Expires
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Actions
@@ -350,18 +856,26 @@ export default function SubscriptionsPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                        {formatDate(sub.start_date)}
+                        {formatDate(sub.current_period_start)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                        {formatDate(sub.end_date)}
+                        {formatDate(sub.current_period_end)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <a
-                          href={`/users/${sub.user_id}`}
-                          className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                        >
-                          View User
-                        </a>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => openEdit(sub)}
+                            className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                          >
+                            Edit
+                          </button>
+                          <a
+                            href={`/users/${sub.user_id}`}
+                            className="text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-gray-100"
+                          >
+                            View User
+                          </a>
+                        </div>
                       </td>
                     </tr>
                   ))}

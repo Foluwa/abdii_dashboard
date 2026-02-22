@@ -107,6 +107,8 @@ export interface BillingPlan {
   name: string;
   description: string;
   price_display: string;
+  apple_price_display?: string | null;
+  google_price_display?: string | null;
   billing_period: BillingPeriod;
   features: string[];
   apple_product_id: string;
@@ -133,6 +135,15 @@ export interface UserListItem {
   device_name?: string | null;
   device_app_version?: string | null;
   device_build_number?: string | null;
+
+  // Premium entitlement summary (computed from subscriptions)
+  has_premium?: boolean;
+  premium_plan_id?: string | null;
+  premium_status?: string | null;
+  premium_current_period_start?: string | null;
+  premium_current_period_end?: string | null;
+  premium_platform?: string | null;
+  premium_provider?: string | null;
 }
 
 export interface UserDetail extends UserListItem {

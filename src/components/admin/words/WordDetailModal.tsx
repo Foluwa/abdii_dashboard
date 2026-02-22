@@ -13,7 +13,7 @@
 
 import React, { useState } from 'react';
 import { useWordDetail, useExampleGeneration, useExampleManagement } from '@/hooks/useWordManagement';
-import { FiX, FiVolume2, FiPlus, FiEdit2, FiTrash2, FiLoader, FiSave, FiRefreshCw } from 'react-icons/fi';
+import { FiX, FiVolume2, FiPlus, FiEdit2, FiTrash2, FiLoader, FiSave, FiRefreshCw, FiEye, FiEyeOff } from 'react-icons/fi';
 import { apiClient } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 
@@ -42,6 +42,9 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
   const [editedExampleEnglish, setEditedExampleEnglish] = useState('');
   const [isRegeneratingAudio, setIsRegeneratingAudio] = useState(false);
   const [exampleCount, setExampleCount] = useState(3);
+  const [isPreviewingPrompt, setIsPreviewingPrompt] = useState(false);
+  const [promptPreview, setPromptPreview] = useState<string | null>(null);
+  const [promptMessagesPreview, setPromptMessagesPreview] = useState<any[] | null>(null);
   const [customTTSText, setCustomTTSText] = useState('');
   const [generatedAudioUrl, setGeneratedAudioUrl] = useState<string | null>(null);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
@@ -118,8 +121,8 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
   };
 
   const startEditExample = (example: any) => {
-    setEditedExampleYoruba(example.text);
-    setEditedExampleEnglish(example.translation_text || '');
+    setEditedExampleYoruba(example.example_yoruba);
+    setEditedExampleEnglish(example.example_english || '');
     setEditingExampleId(example.id);
   };
 
@@ -130,8 +133,33 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
     }
 
     await generateExamples(wordId, exampleCount);
+    setPromptPreview(null);
+    setPromptMessagesPreview(null);
     mutate();
     onUpdate();
+  };
+
+  const handlePreviewExamplesPrompt = async () => {
+    if (exampleCount < 1 || exampleCount > 10) {
+      toast.error('Please enter a number between 1 and 10');
+      return;
+    }
+
+    setIsPreviewingPrompt(true);
+    try {
+      const response = await apiClient.post(
+        `/api/v1/admin/content/words/${wordId}/generate-examples`,
+        { count: exampleCount, preview_only: true }
+      );
+
+      const data = response.data;
+      setPromptPreview(data.prompt || null);
+      setPromptMessagesPreview(data.messages || null);
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || error.response?.data?.error || 'Failed to preview prompt');
+    } finally {
+      setIsPreviewingPrompt(false);
+    }
   };
 
   const handleDeleteExample = async (exampleId: string) => {
@@ -149,11 +177,12 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
 
     setIsGeneratingAudio(true);
     try {
+      const languageCode = wordDetail?.word?.language_code || 'yor';
       const response = await apiClient.post('/api/v1/admin/audio/generate', {
         text: customTTSText,
         provider: 'spitch',
         voice_code: 'funmi',
-        language_code: 'yor',
+        language_code: languageCode,
         save_to_s3: true,
         audio_format: 'wav'
       });
@@ -372,10 +401,10 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
                                 ) : (
                                   <div className="flex items-start justify-between gap-2">
                                     <p className="flex-1 text-gray-900 dark:text-white">
-                                      {gloss.text}
+                                      {gloss.definition}
                                     </p>
                                     <button
-                                      onClick={() => startEditGloss(gloss.id, gloss.text)}
+                                      onClick={() => startEditGloss(gloss.id, gloss.definition)}
                                       className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                                     >
                                       <FiEdit2 size={14} />
@@ -553,6 +582,32 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
                     placeholder="Count"
                   />
                   <button
+                    onClick={promptPreview ? () => {
+                      setPromptPreview(null);
+                      setPromptMessagesPreview(null);
+                    } : handlePreviewExamplesPrompt}
+                    disabled={isPreviewingPrompt}
+                    className="px-3 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 disabled:opacity-60 text-gray-800 dark:text-gray-200 rounded-lg flex items-center gap-2 text-sm"
+                    title="Preview the exact prompt sent to OpenAI"
+                  >
+                    {promptPreview ? (
+                      <>
+                        <FiEyeOff />
+                        Hide Prompt
+                      </>
+                    ) : isPreviewingPrompt ? (
+                      <>
+                        <FiLoader className="animate-spin" />
+                        Previewing...
+                      </>
+                    ) : (
+                      <>
+                        <FiEye />
+                        Preview Prompt
+                      </>
+                    )}
+                  </button>
+                  <button
                     onClick={handleGenerateExamples}
                     disabled={isGenerating}
                     className="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-400 text-white rounded-lg flex items-center gap-2 text-sm"
@@ -572,6 +627,32 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
                 </div>
               </div>
 
+              {promptPreview && (
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                      Prompt Preview
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      Includes meaning/gloss + constraints
+                    </div>
+                  </div>
+                  <pre className="text-xs whitespace-pre-wrap text-gray-800 dark:text-gray-200 max-h-56 overflow-auto">
+                    {promptPreview}
+                  </pre>
+                  {promptMessagesPreview && (
+                    <details className="mt-3">
+                      <summary className="cursor-pointer text-xs text-gray-600 dark:text-gray-300">
+                        Show messages JSON
+                      </summary>
+                      <pre className="mt-2 text-xs whitespace-pre-wrap text-gray-700 dark:text-gray-200 max-h-56 overflow-auto">
+                        {JSON.stringify(promptMessagesPreview, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                </div>
+              )}
+
               {wordDetail.examples.length === 0 ? (
                 <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                   No examples yet. Click "Generate Examples" to create some.
@@ -587,7 +668,7 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
                         <div className="space-y-3">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                              Yoruba
+                              {wordDetail?.word?.language_name || 'Text'}
                             </label>
                             <input
                               type="text"
@@ -626,13 +707,23 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
                       ) : (
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 space-y-2">
-                            <p className="text-gray-900 dark:text-white font-medium">
-                              {example.text}
-                            </p>
-                            {example.translation_text && (
-                              <p className="text-gray-600 dark:text-gray-400 text-sm">
-                                {example.translation_text}
+                            <div>
+                              <div className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">
+                                {wordDetail?.word?.language_name || 'Text'}
+                              </div>
+                              <p className="text-gray-900 dark:text-white font-medium">
+                                {example.example_yoruba}
                               </p>
+                            </div>
+                            {example.example_english && (
+                              <div>
+                                <div className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">
+                                  English
+                                </div>
+                                <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                  {example.example_english}
+                                </p>
+                              </div>
                             )}
                             {example.audio_url && (
                               <button
@@ -742,7 +833,7 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Audio Files ({wordDetail.audio?.length ?? 0})
+                      Audio Files ({wordDetail.audio_files?.length ?? 0})
                     </h3>
                     <button
                       onClick={handleRegenerateAudio}
@@ -763,13 +854,13 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
                     </button>
                   </div>
 
-                  {(wordDetail.audio?.length ?? 0) === 0 ? (
+                  {(wordDetail.audio_files?.length ?? 0) === 0 ? (
                     <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                       No audio files available. Click "Regenerate Audio" to create audio for this word.
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {wordDetail.audio?.map((audio) => (
+                      {wordDetail.audio_files?.map((audio) => (
                         <div
                           key={audio.id}
                           className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 flex items-center justify-between"
@@ -777,7 +868,7 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
                           <div className="flex-1">
                             <div className="flex items-center gap-3">
                               <span className="font-medium text-gray-900 dark:text-white">
-                                {audio.tts_provider}
+                                {audio.provider}
                               </span>
                               {audio.voice_name && (
                             <span className="text-xs text-gray-500 dark:text-gray-400">
@@ -786,13 +877,19 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
                           )}
                         </div>
                       </div>
-                      <button
-                        onClick={() => playAudio(audio.audio_url, `audio-${audio.id}`)}
-                        className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg flex items-center gap-2 text-sm"
-                      >
-                        <FiVolume2 />
-                        {playingAudio === `audio-${audio.id}` ? 'Playing...' : 'Play'}
-                      </button>
+                      {audio.audio_url ? (
+                        <button
+                          onClick={() => playAudio(audio.audio_url!, `audio-${audio.id}`)}
+                          className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg flex items-center gap-2 text-sm"
+                        >
+                          <FiVolume2 />
+                          {playingAudio === `audio-${audio.id}` ? 'Playing...' : 'Play'}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          No audio URL
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>

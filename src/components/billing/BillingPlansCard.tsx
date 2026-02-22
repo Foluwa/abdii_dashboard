@@ -12,10 +12,12 @@ function PlanDetails({ plan }: { plan: BillingPlan }) {
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="text-xs text-gray-500 dark:text-gray-400">
           <div className="font-medium text-gray-700 dark:text-white/80">Apple</div>
+          <div className="mt-0.5">Price: <span className="font-mono">{plan.apple_price_display || "—"}</span></div>
           <div className="font-mono break-all">{plan.apple_product_id || "—"}</div>
         </div>
         <div className="text-xs text-gray-500 dark:text-gray-400">
           <div className="font-medium text-gray-700 dark:text-white/80">Google</div>
+          <div className="mt-0.5">Price: <span className="font-mono">{plan.google_price_display || "—"}</span></div>
           <div className="font-mono break-all">{plan.google_product_id || "—"}</div>
           <div className="font-mono break-all">{plan.google_base_plan_id || "—"}</div>
         </div>
@@ -34,9 +36,25 @@ function PlanDetails({ plan }: { plan: BillingPlan }) {
 
 export default function BillingPlansCard() {
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
-  const billingCountryCode = (process.env.NEXT_PUBLIC_BILLING_COUNTRY_CODE || "").trim().toUpperCase();
-  const { plans, isLoading, isError, refresh } = useBillingPlans(billingCountryCode || undefined);
-  const countrySuffix = billingCountryCode ? `?country_code=${encodeURIComponent(billingCountryCode)}` : "";
+  const defaultCountry = (process.env.NEXT_PUBLIC_BILLING_COUNTRY_CODE || "NG").trim().toUpperCase();
+
+  const countryOptions = React.useMemo(
+    () => [
+      { code: "NG", name: "Nigeria" },
+      { code: "US", name: "United States" },
+      { code: "GB", name: "United Kingdom" },
+      { code: "CA", name: "Canada" },
+      { code: "AU", name: "Australia" },
+      { code: "DE", name: "Germany" },
+      { code: "FR", name: "France" },
+      { code: "NL", name: "Netherlands" },
+    ],
+    []
+  );
+
+  const [selectedCountry, setSelectedCountry] = React.useState<string>(defaultCountry || "NG");
+  const { plans, isLoading, isError, refresh } = useBillingPlans(selectedCountry || undefined);
+  const countrySuffix = selectedCountry ? `?country_code=${encodeURIComponent(selectedCountry)}` : "";
   const plansUrl = `${apiBaseUrl}/api/v1/billing/plans${countrySuffix}`;
 
   const [expandedPlanId, setExpandedPlanId] = React.useState<string | null>(null);
@@ -53,13 +71,30 @@ export default function BillingPlansCard() {
               Live from <span className="font-mono break-all">{plansUrl}</span>
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => refresh()}
-            className="text-sm text-brand-600 hover:text-brand-700 dark:text-brand-400"
-          >
-            Refresh
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col items-end">
+              <label className="text-[11px] text-gray-500 dark:text-gray-400">Country</label>
+              <select
+                value={selectedCountry}
+                onChange={(e) => setSelectedCountry(e.target.value)}
+                className="mt-1 h-8 rounded-md border border-gray-200 bg-white px-2 text-xs text-gray-700 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white/80"
+              >
+                {countryOptions.map((opt) => (
+                  <option key={opt.code} value={opt.code}>
+                    {opt.code} • {opt.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => refresh()}
+              className="text-sm text-brand-600 hover:text-brand-700 dark:text-brand-400"
+            >
+              Refresh
+            </button>
+          </div>
         </div>
       </div>
 
@@ -114,8 +149,27 @@ export default function BillingPlansCard() {
                     </div>
 
                     <div className="shrink-0 flex items-center gap-2">
-                      <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                        {plan.price_display}
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <div className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Apple</div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                            {plan.apple_price_display || "—"}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Google</div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                            {plan.google_price_display || "—"}
+                          </div>
+                        </div>
+                        {!plan.apple_price_display && !plan.google_price_display ? (
+                          <div className="text-right">
+                            <div className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Fallback</div>
+                            <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                              {plan.price_display}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                       <ChevronDownIcon
                         className={`h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform ${

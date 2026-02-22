@@ -387,6 +387,9 @@ export default function UsersPage() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Role
                     </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Premium
+                      </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Status
                     </th>
@@ -468,6 +471,13 @@ export default function UsersPage() {
                           <StatusBadge status={getRoleBadgeStatus(user.role)} label={user.role} />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
+                          {user.has_premium ? (
+                            <StatusBadge status="success" label="Premium" />
+                          ) : (
+                            <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <StatusBadge status={user.is_active ? "success" : "error"} 
                             label={user.is_active ? "Active" : "Inactive"} />
                         </td>
@@ -506,7 +516,7 @@ export default function UsersPage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={7} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                      <td colSpan={8} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                         No users found
                       </td>
                     </tr>
