@@ -23,6 +23,10 @@ RUN if [ ! -f .env.production ]; then echo "Warning: .env.production not found";
 # Set environment variables for build
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Build-time public env vars (baked into the JS bundle)
+ARG NEXT_PUBLIC_ADMIN_MONITORING_TOKEN
+ENV NEXT_PUBLIC_ADMIN_MONITORING_TOKEN=$NEXT_PUBLIC_ADMIN_MONITORING_TOKEN
+
 # Build the application
 RUN npm run build
 

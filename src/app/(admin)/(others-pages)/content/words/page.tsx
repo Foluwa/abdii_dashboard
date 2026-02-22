@@ -36,7 +36,7 @@ export default function WordsPage() {
   const searchParams = useSearchParams();
 
   // Basic state
-  const [selectedLanguage, setSelectedLanguage] = useState<number | undefined>(undefined);
+  const [selectedLanguage, setSelectedLanguage] = useState<string>("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
@@ -95,7 +95,7 @@ export default function WordsPage() {
     const sortByP = searchParams.get('sort_by');
     const sortDirP = searchParams.get('sort_dir');
 
-    if (langId) setSelectedLanguage(Number(langId));
+    if (langId) setSelectedLanguage(langId);
     if (searchQ) setSearch(searchQ);
     if (pageP) setPage(Number(pageP));
     if (limitP) setLimit(Number(limitP));
@@ -123,7 +123,7 @@ export default function WordsPage() {
   // Update URL when filters change
   const updateURL = useCallback(() => {
     const params = new URLSearchParams();
-    if (selectedLanguage) params.set('language_id', selectedLanguage.toString());
+    if (selectedLanguage) params.set('language_id', selectedLanguage);
     if (search) params.set('search', search);
     if (page > 1) params.set('page', page.toString());
     if (limit !== 50) params.set('limit', limit.toString());
@@ -198,7 +198,7 @@ export default function WordsPage() {
   };
 
   const { words, total, isLoading, isError, refresh, filtersApplied } = useWords({ 
-    language_id: selectedLanguage?.toString(), 
+    language_id: selectedLanguage || undefined,
     search, 
     page, 
     limit,
@@ -551,9 +551,9 @@ export default function WordsPage() {
                 </div>
               </label>
               <StyledSelect
-                value={selectedLanguage?.toString() || ""}
+                value={selectedLanguage}
                 onChange={(e) => {
-                  setSelectedLanguage(e.target.value ? Number(e.target.value) : undefined);
+                  setSelectedLanguage(e.target.value);
                   setPage(1);
                 }}
                 options={[
