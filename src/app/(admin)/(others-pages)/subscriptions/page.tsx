@@ -368,13 +368,29 @@ export default function SubscriptionsPage() {
 
   const formatDateTime = (dateString: string | null) => {
     if (!dateString) return "—";
-    return new Date(dateString).toLocaleString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+
+    // Some browsers (notably Safari) may not parse ISO strings with
+    // >3 fractional-second digits (e.g. 2026-02-14T15:58:55.442485Z).
+    // Truncate to milliseconds to keep rendering stable.
+    const normalized = dateString.replace(
+      /(\.\d{3})\d+(Z|[+-]\d{2}:\d{2})$/,
+      "$1$2"
+    );
+
+    const date = new Date(normalized);
+    if (Number.isNaN(date.getTime())) return dateString;
+
+    try {
+      return date.toLocaleString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return dateString;
+    }
   };
 
   return (
