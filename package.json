@@ -34,7 +34,6 @@
     "tailwind-merge": "^2.6.0"
   },
   "devDependencies": {
-    "@next/swc-darwin-arm64": "16.0.10",
     "@babel/core": "^7.26.0",
     "@babel/preset-env": "^7.26.0",
     "@babel/preset-react": "^7.26.0",
