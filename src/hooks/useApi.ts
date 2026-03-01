@@ -11,6 +11,16 @@
 import useSWR from 'swr';
 import { apiClient } from '@/lib/api';
 import type { UserRole } from '@/types/auth';
+import type {
+  CourseAdminListResponse,
+  CourseCurriculumResponse,
+  CourseValidationResponse,
+  LessonBlueprintAdminListResponse,
+  LessonBlueprintValidationResponse,
+  PublicLessonBlueprintResponse,
+} from '@/types/curriculum';
+import type { AdminAuditLogListResponse } from '@/types/audit-log';
+import type { CurriculumOpsMetricsResponse } from '@/types/admin-analytics';
 import {
   SystemStatus,
   SystemStats,
@@ -299,6 +309,272 @@ export function useLessons(filters?: { language_id?: number; status?: string; pa
   return {
     lessons: data?.lessons || [],
     total: data?.total || 0,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
+/**
+ * Curriculum / Blueprint (Admin) Hooks
+ */
+export function useAdminBlueprint(blueprintId: string | null) {
+  const { data, error, mutate } = useSWR<LessonBlueprintValidationResponse>(
+    blueprintId ? `/api/v1/admin/lesson-blueprints/${blueprintId}` : null,
+    fetcher,
+    {
+      refreshInterval: 0,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      shouldRetryOnError: false,
+    }
+  );
+
+  return {
+    data,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+    mutate,
+  };
+}
+
+export function useAdminCourse(courseId: string | null) {
+  const { data, error, mutate } = useSWR<CourseValidationResponse>(
+    courseId ? `/api/v1/admin/courses/${courseId}` : null,
+    fetcher,
+    {
+      refreshInterval: 0,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      shouldRetryOnError: false,
+    }
+  );
+
+  return {
+    data,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+    mutate,
+  };
+}
+
+export function useAdminCourseValidationSummary(courseId: string | null) {
+  const { data, error, mutate } = useSWR<CourseValidationResponse>(
+    courseId ? `/api/v1/admin/courses/${courseId}/validation-summary` : null,
+    fetcher,
+    {
+      refreshInterval: 0,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      shouldRetryOnError: false,
+    }
+  );
+
+  return {
+    data,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+    mutate,
+  };
+}
+
+export interface AdminCoursesListFilters {
+  page?: number;
+  limit?: number;
+  status?: string;
+  enabled?: boolean;
+  search?: string;
+}
+
+export function useAdminCoursesList(filters?: AdminCoursesListFilters) {
+  const params = new URLSearchParams();
+  if (filters?.page) params.set('page', String(filters.page));
+  if (filters?.limit) params.set('limit', String(filters.limit));
+  if (filters?.status) params.set('status', filters.status);
+  if (typeof filters?.enabled === 'boolean') params.set('enabled', String(filters.enabled));
+  if (filters?.search) params.set('search', filters.search);
+
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  const url = `/api/v1/admin/courses${suffix}`;
+
+  const { data, error, mutate } = useSWR<CourseAdminListResponse>(url, fetcher, {
+    refreshInterval: 0,
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    shouldRetryOnError: false,
+  });
+
+  return {
+    data,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+    mutate,
+  };
+}
+
+export interface AdminLessonBlueprintsListFilters {
+  page?: number;
+  limit?: number;
+  course_id?: string;
+  status?: string;
+  enabled?: boolean;
+  search?: string;
+}
+
+export function useAdminLessonBlueprintsList(filters?: AdminLessonBlueprintsListFilters) {
+  const params = new URLSearchParams();
+  if (filters?.page) params.set('page', String(filters.page));
+  if (filters?.limit) params.set('limit', String(filters.limit));
+  if (filters?.course_id) params.set('course_id', filters.course_id);
+  if (filters?.status) params.set('status', filters.status);
+  if (typeof filters?.enabled === 'boolean') params.set('enabled', String(filters.enabled));
+  if (filters?.search) params.set('search', filters.search);
+
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  const url = `/api/v1/admin/lesson-blueprints${suffix}`;
+
+  const { data, error, mutate } = useSWR<LessonBlueprintAdminListResponse>(url, fetcher, {
+    refreshInterval: 0,
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    shouldRetryOnError: false,
+  });
+
+  return {
+    data,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+    mutate,
+  };
+}
+
+export interface AdminAuditLogListFilters {
+  page?: number;
+  limit?: number;
+  action?: string;
+  action_prefix?: string;
+  target_type?: string;
+  target_id?: string;
+  admin_user_id?: string;
+  result?: string;
+  from_ts?: string;
+  to_ts?: string;
+
+  // Phase 11 (additive) aliases / enhancements
+  offset?: number;
+  q?: string;
+  entity_type?: string;
+  entity_id?: string;
+  entity_key?: string;
+  date_from?: string;
+  date_to?: string;
+}
+
+export function useAdminAuditLogList(filters?: AdminAuditLogListFilters) {
+  const params = new URLSearchParams();
+  if (filters?.page) params.set('page', String(filters.page));
+  if (filters?.limit) params.set('limit', String(filters.limit));
+  if (filters?.action) params.set('action', filters.action);
+  if (filters?.action_prefix) params.set('action_prefix', filters.action_prefix);
+  if (filters?.target_type) params.set('target_type', filters.target_type);
+  if (filters?.target_id) params.set('target_id', filters.target_id);
+  if (filters?.admin_user_id) params.set('admin_user_id', filters.admin_user_id);
+  if (filters?.result) params.set('result', filters.result);
+  if (filters?.from_ts) params.set('from_ts', filters.from_ts);
+  if (filters?.to_ts) params.set('to_ts', filters.to_ts);
+
+  if (typeof filters?.offset === 'number') params.set('offset', String(filters.offset));
+  if (filters?.q) params.set('q', filters.q);
+  if (filters?.entity_type) params.set('entity_type', filters.entity_type);
+  if (filters?.entity_id) params.set('entity_id', filters.entity_id);
+  if (filters?.entity_key) params.set('entity_key', filters.entity_key);
+  if (filters?.date_from) params.set('date_from', filters.date_from);
+  if (filters?.date_to) params.set('date_to', filters.date_to);
+
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  const url = `/api/v1/admin/audit-log${suffix}`;
+
+  const { data, error, mutate } = useSWR<AdminAuditLogListResponse>(url, fetcher, {
+    refreshInterval: 0,
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    shouldRetryOnError: false,
+  });
+
+  return {
+    data,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+    mutate,
+  };
+}
+
+/**
+ * Curriculum / Blueprint (Public Read) Hooks
+ *
+ * Used to augment admin views with fields that are intentionally not exposed
+ * on admin responses (e.g. availability + course curriculum tree).
+ */
+export function usePublicBlueprint(blueprintId: string | null) {
+  const { data, error, mutate } = useSWR<PublicLessonBlueprintResponse>(
+    blueprintId ? `/api/v1/lesson-blueprints/${blueprintId}` : null,
+    fetcher,
+    {
+      refreshInterval: 0,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      shouldRetryOnError: false,
+    }
+  );
+
+  return {
+    blueprint: data,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
+export function useCourseCurriculum(courseId: string | null) {
+  const { data, error, mutate } = useSWR<CourseCurriculumResponse>(
+    courseId ? `/api/v1/courses/${courseId}/curriculum` : null,
+    fetcher,
+    {
+      refreshInterval: 0,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      shouldRetryOnError: false,
+    }
+  );
+
+  return {
+    curriculum: data,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
+export function useCourseCurriculumByKey(courseKey: string | null) {
+  const { data, error, mutate } = useSWR<CourseCurriculumResponse>(
+    courseKey ? `/api/v1/courses/by-key/${courseKey}/curriculum` : null,
+    fetcher,
+    {
+      refreshInterval: 0,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      shouldRetryOnError: false,
+    }
+  );
+
+  return {
+    curriculum: data,
     isLoading: !error && !data,
     isError: error,
     refresh: mutate,
@@ -794,4 +1070,101 @@ export function useAvailableGames() {
     isError: error,
     refresh: mutate,
   };
+}
+
+/**
+ * Curriculum Ops Metrics Hook (Phase 11)
+ */
+export function useAdminCurriculumOpsMetrics(days: number = 7) {
+  const params = new URLSearchParams();
+  params.append('days', days.toString());
+
+  const url = `/api/v1/admin/analytics/curriculum-ops?${params.toString()}`;
+  const { data, error, mutate } = useSWR<CurriculumOpsMetricsResponse>(url, fetcher, {
+    revalidateOnFocus: false,
+    refreshInterval: 0,
+    shouldRetryOnError: false,
+  });
+
+  return {
+    metrics: data,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
+/**
+ * User Learning State Hook (Phase 14 / Phase 18 updated)
+ * Admin-side: read learning state for a specific user by ID.
+ * Uses the proper admin endpoint: GET /api/v1/admin/learning-state/users/{id}
+ */
+export function useAdminUserLearningState(userId: string | null) {
+  const url = userId ? `/api/v1/admin/learning-state/users/${encodeURIComponent(userId)}` : null;
+  const { data, error, mutate } = useSWR(url, fetcher, {
+    revalidateOnFocus: false,
+    refreshInterval: 0,
+    shouldRetryOnError: false,
+  });
+
+  return {
+    state: data as { user_id: string; courses: Array<{
+      course_id: string;
+      course_key: string | null;
+      course_title: string | null;
+      enrolled_at: string;
+      last_active_at: string | null;
+      current_unit_id: string | null;
+      current_section_id: string | null;
+      progress_percent: number;
+      is_completed: boolean;
+      completed_at: string | null;
+    }> } | undefined,
+    isLoading: !error && !data && !!userId,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
+/**
+ * Admin: reset a user's course progress.
+ * POST /api/v1/admin/learning-state/users/{userId}/courses/{courseId}/reset
+ */
+export async function adminResetCourseProgress(
+  userId: string,
+  courseId: string,
+): Promise<{ ok: boolean; deleted_progress_rows: number }> {
+  const res = await fetch(
+    `/api/v1/admin/learning-state/users/${encodeURIComponent(userId)}/courses/${encodeURIComponent(courseId)}/reset`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Reset failed (${res.status}): ${text}`);
+  }
+  return res.json();
+}
+
+/**
+ * Admin: set a user's current unit/section pointer.
+ * POST /api/v1/admin/learning-state/users/{userId}/courses/{courseId}/set-pointer
+ */
+export async function adminSetLearningPointer(
+  userId: string,
+  courseId: string,
+  payload: { current_unit_id?: string; current_section_id?: string },
+): Promise<{ ok: boolean }> {
+  const res = await fetch(
+    `/api/v1/admin/learning-state/users/${encodeURIComponent(userId)}/courses/${encodeURIComponent(courseId)}/set-pointer`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Set pointer failed (${res.status}): ${text}`);
+  }
+  return res.json();
 }

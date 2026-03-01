@@ -1,13 +1,17 @@
 "use client";
 import React, { forwardRef } from "react";
 
-export interface StyledSelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
+export interface StyledSelectProps
+  extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, "onChange" | "value"> {
   label?: string;
   error?: string;
   helperText?: string;
   options: Array<{ value: string | number; label: string; disabled?: boolean }>;
   placeholder?: string;
   fullWidth?: boolean;
+  value: string | number;
+  onChange?: (event: React.ChangeEvent<HTMLSelectElement>) => void;
+  onValueChange?: (value: string) => void;
 }
 
 export const StyledSelect = forwardRef<HTMLSelectElement, StyledSelectProps>(
@@ -21,6 +25,8 @@ export const StyledSelect = forwardRef<HTMLSelectElement, StyledSelectProps>(
       fullWidth = false,
       className = "",
       disabled = false,
+      onChange,
+      onValueChange,
       ...props
     },
     ref
@@ -54,6 +60,10 @@ export const StyledSelect = forwardRef<HTMLSelectElement, StyledSelectProps>(
               ${widthClass}
               pr-10
             `}
+            onChange={(e) => {
+              onChange?.(e);
+              onValueChange?.(e.target.value);
+            }}
             {...props}
           >
             {placeholder && (

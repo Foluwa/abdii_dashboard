@@ -21,7 +21,13 @@ type NavItem = {
   name: string;
   icon: React.ReactNode;
   path?: string;
-  subItems?: { name: string; path: string; pro?: boolean; new?: boolean }[];
+  subItems?: {
+    name: string;
+    path?: string;
+    pro?: boolean;
+    new?: boolean;
+    subItems?: { name: string; path: string; pro?: boolean; new?: boolean }[];
+  }[];
   permission?: string; // Required permission to see this item
 };
 
@@ -70,6 +76,7 @@ const navItems: NavItem[] = [
     subItems: [
       { name: "Game Analytics", path: "/analytics" },
       { name: "Player Analytics", path: "/analytics/players" },
+      { name: "Curriculum Ops", path: "/analytics/curriculum-ops" },
     ],
   },
   {
@@ -85,6 +92,31 @@ const navItems: NavItem[] = [
       { name: "Sentences", path: "/content/sentences" },
       { name: "Phrases", path: "/content/phrases" },
       { name: "Proverbs", path: "/content/proverbs" },
+    ],
+  },
+  {
+    name: "Curriculum",
+    icon: <PageIcon />,
+    permission: "content:read",
+    subItems: [
+      { name: "Courses", path: "/content/curriculum/courses" },
+      { name: "Curriculum Editor", path: "/content/curriculum/editor" },
+      { name: "Lesson Blueprints", path: "/content/curriculum/lesson-blueprints" },
+    ],
+  },
+  {
+    name: "Audit Log",
+    icon: <TableIcon />,
+    permission: "content:read",
+    subItems: [
+      { name: "Audit Log", path: "/content/audit-log" },
+    ],
+  },
+  {
+    name: "Games",
+    icon: <BoxCubeIcon />,
+    permission: "content:read",
+    subItems: [
       { name: "Games", path: "/games" },
     ],
   },
@@ -125,6 +157,8 @@ const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const { checkPermission } = useAuth();
   const pathname = usePathname();
+
+  const [openNestedSubmenuKey, setOpenNestedSubmenuKey] = useState<string | null>(null);
 
   /**
    * Filter nav items based on user permissions
@@ -225,40 +259,112 @@ const AppSidebar: React.FC = () => {
               <ul className="mt-2 space-y-1 ml-9">
                 {nav.subItems.map((subItem) => (
                   <li key={subItem.name}>
-                    <Link
-                      href={subItem.path}
-                      className={`menu-dropdown-item ${
-                        isActive(subItem.path)
-                          ? "menu-dropdown-item-active"
-                          : "menu-dropdown-item-inactive"
-                      }`}
-                    >
-                      {subItem.name}
-                      <span className="flex items-center gap-1 ml-auto">
-                        {subItem.new && (
-                          <span
-                            className={`ml-auto ${
-                              isActive(subItem.path)
-                                ? "menu-dropdown-badge-active"
-                                : "menu-dropdown-badge-inactive"
-                            } menu-dropdown-badge `}
-                          >
-                            new
+                    {subItem.subItems ? (
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const key = `${menuType}-${index}-${subItem.name}`;
+                            setOpenNestedSubmenuKey((prev) => (prev === key ? null : key));
+                          }}
+                          className={`menu-dropdown-item w-full ${
+                            subItem.subItems.some((child) => isActive(child.path))
+                              ? "menu-dropdown-item-active"
+                              : "menu-dropdown-item-inactive"
+                          }`}
+                        >
+                          {subItem.name}
+                          <span className="flex items-center gap-1 ml-auto">
+                            <ChevronDownIcon
+                              className={`w-4 h-4 transition-transform duration-200 ${
+                                openNestedSubmenuKey === `${menuType}-${index}-${subItem.name}`
+                                  ? "rotate-180 text-brand-500"
+                                  : ""
+                              }`}
+                            />
                           </span>
+                        </button>
+                        {openNestedSubmenuKey === `${menuType}-${index}-${subItem.name}` && (
+                          <ul className="mt-1 space-y-1 ml-4">
+                            {subItem.subItems.map((child) => (
+                              <li key={child.name}>
+                                <Link
+                                  href={child.path}
+                                  className={`menu-dropdown-item ${
+                                    isActive(child.path)
+                                      ? "menu-dropdown-item-active"
+                                      : "menu-dropdown-item-inactive"
+                                  }`}
+                                >
+                                  {child.name}
+                                  <span className="flex items-center gap-1 ml-auto">
+                                    {child.new && (
+                                      <span
+                                        className={`ml-auto ${
+                                          isActive(child.path)
+                                            ? "menu-dropdown-badge-active"
+                                            : "menu-dropdown-badge-inactive"
+                                        } menu-dropdown-badge `}
+                                      >
+                                        new
+                                      </span>
+                                    )}
+                                    {child.pro && (
+                                      <span
+                                        className={`ml-auto ${
+                                          isActive(child.path)
+                                            ? "menu-dropdown-badge-active"
+                                            : "menu-dropdown-badge-inactive"
+                                        } menu-dropdown-badge `}
+                                      >
+                                        pro
+                                      </span>
+                                    )}
+                                  </span>
+                                </Link>
+                              </li>
+                            ))}
+                          </ul>
                         )}
-                        {subItem.pro && (
-                          <span
-                            className={`ml-auto ${
-                              isActive(subItem.path)
-                                ? "menu-dropdown-badge-active"
-                                : "menu-dropdown-badge-inactive"
-                            } menu-dropdown-badge `}
-                          >
-                            pro
+                      </div>
+                    ) : (
+                      subItem.path && (
+                        <Link
+                          href={subItem.path}
+                          className={`menu-dropdown-item ${
+                            isActive(subItem.path)
+                              ? "menu-dropdown-item-active"
+                              : "menu-dropdown-item-inactive"
+                          }`}
+                        >
+                          {subItem.name}
+                          <span className="flex items-center gap-1 ml-auto">
+                            {subItem.new && (
+                              <span
+                                className={`ml-auto ${
+                                  isActive(subItem.path)
+                                    ? "menu-dropdown-badge-active"
+                                    : "menu-dropdown-badge-inactive"
+                                } menu-dropdown-badge `}
+                              >
+                                new
+                              </span>
+                            )}
+                            {subItem.pro && (
+                              <span
+                                className={`ml-auto ${
+                                  isActive(subItem.path)
+                                    ? "menu-dropdown-badge-active"
+                                    : "menu-dropdown-badge-inactive"
+                                } menu-dropdown-badge `}
+                              >
+                                pro
+                              </span>
+                            )}
                           </span>
-                        )}
-                      </span>
-                    </Link>
+                        </Link>
+                      )
+                    )}
                   </li>
                 ))}
               </ul>
@@ -289,7 +395,12 @@ const AppSidebar: React.FC = () => {
       items.forEach((nav, index) => {
         if (nav.subItems) {
           nav.subItems.forEach((subItem) => {
-            if (isActive(subItem.path)) {
+            const isPathActive = subItem.path ? isActive(subItem.path) : false;
+            const isNestedActive = subItem.subItems
+              ? subItem.subItems.some((child) => isActive(child.path))
+              : false;
+
+            if (isPathActive || isNestedActive) {
               setOpenSubmenu({
                 type: menuType as "main" | "others",
                 index,
