@@ -73,10 +73,22 @@ function UnitRow({
     },
   });
 
+  const attachDropRef = (el: HTMLDivElement | null) => {
+    dropRef(el);
+  };
+
+  const attachDragRef = (el: HTMLDivElement | null) => {
+    dragRef(el);
+  };
+
+  const attachSectionDropRef = (el: HTMLDivElement | null) => {
+    sectionDropRef(el);
+  };
+
   return (
-    <div ref={dropRef} className={`rounded-lg border border-gray-200 dark:border-gray-800 ${isDragging ? 'opacity-60' : ''}`}>
+    <div ref={attachDropRef} className={`rounded-lg border border-gray-200 dark:border-gray-800 ${isDragging ? 'opacity-60' : ''}`}>
       <div className="flex items-center justify-between gap-3 bg-gray-50 px-4 py-3 dark:bg-gray-900">
-        <div className="flex items-center gap-3" ref={dragRef}>
+        <div className="flex items-center gap-3" ref={attachDragRef}>
           <span className="cursor-grab text-lg text-gray-400">==</span>
           <div>
             <div className="text-sm font-semibold text-gray-900 dark:text-white">{unit.title}</div>
@@ -95,7 +107,7 @@ function UnitRow({
         />
       </div>
 
-      <div ref={sectionDropRef} className="space-y-2 px-4 py-3">
+      <div ref={attachSectionDropRef} className="space-y-2 px-4 py-3">
         {unit.sections.map((section, sectionIndex) => (
           <SectionRow
             key={`${section.section_key}-${section.id}`}
@@ -142,14 +154,22 @@ function SectionRow({
     },
   });
 
+  const attachDropRef = (el: HTMLDivElement | null) => {
+    dropRef(el);
+  };
+
+  const attachDragRef = (el: HTMLDivElement | null) => {
+    dragRef(el);
+  };
+
   return (
     <div
-      ref={dropRef}
+      ref={attachDropRef}
       className={`flex items-center justify-between gap-3 rounded-md border border-gray-200 px-3 py-2 text-sm dark:border-gray-800 ${
         isDragging ? 'opacity-50' : ''
       }`}
     >
-      <div ref={dragRef} className="flex items-center gap-3">
+      <div ref={attachDragRef} className="flex items-center gap-3">
         <span className="cursor-grab text-gray-400">::</span>
         <div>
           <div className="font-medium text-gray-900 dark:text-white">{section.title}</div>
