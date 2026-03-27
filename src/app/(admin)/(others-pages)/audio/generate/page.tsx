@@ -82,7 +82,7 @@ export default function TTSGenerationPage() {
     setIsLoadingVoices(true);
     try {
       const response = await apiClient.get(`/api/v1/admin/audio/providers/${provider}/voices`, {
-        params: { is_active: true }
+        params: { is_active: true, dedupe_aliases: true }
       });
       setVoices(response.data.voices || []);
       

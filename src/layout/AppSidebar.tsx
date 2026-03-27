@@ -116,6 +116,7 @@ const navItems: NavItem[] = [
     permission: "content:read",
     subItems: [
       { name: "Audit Log", path: "/content/audit-log" },
+      { name: "Orphan Assets", path: "/content/audit-log/orphan-assets" },
     ],
   },
   {

@@ -13,6 +13,7 @@ import { Modal } from "@/components/ui/modal";
 import { ConfirmationModal } from "@/components/ui/modal/ConfirmationModal";
 import { RegenerateAudioModal } from "@/components/modals/RegenerateAudioModal";
 import WordDetailModal from "@/components/admin/words/WordDetailModal";
+import { scheduleQueuedAudioRefresh } from "@/lib/audioRegeneration";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { FiPlus, FiGlobe, FiTrash2, FiVolume2, FiFilter, FiX, FiChevronDown, FiChevronUp } from "react-icons/fi";
 
@@ -466,8 +467,11 @@ export default function WordsPage() {
     // Open modal with word details
     setRegeneratingWord({
       id: word.id,
-      lemma: word.word,
-      language_code: word.language_code || 'yor' // Fallback to Yoruba
+      contentType: 'word',
+      displayText: word.word,
+      defaultText: word.word,
+      languageCode: word.language_code || 'yor',
+      submitEndpoint: `/api/v1/admin/content/words/single/${word.id}/regenerate-audio`,
     });
     setShowRegenerateModal(true);
   };
@@ -1438,9 +1442,9 @@ export default function WordsPage() {
           setShowRegenerateModal(false);
           setRegeneratingWord(null);
         }}
-        word={regeneratingWord}
+        target={regeneratingWord}
         onSuccess={() => {
-          setTimeout(() => refresh(), 2000);
+          scheduleQueuedAudioRefresh(refresh);
         }}
       />
 

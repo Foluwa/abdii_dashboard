@@ -108,6 +108,36 @@ export interface LessonBlueprintAssetLibraryResponse {
   limit: number;
 }
 
+export interface CurriculumContentRef {
+  contentType: string;
+  contentId: string;
+  role?: string | null;
+}
+
+export interface ReadingPracticeCompactSourcePayload {
+  kind: 'reading_practice';
+  version: number;
+  lessonKey: string;
+  presentation?: {
+    title?: string;
+    subtitle?: string;
+    unitLabel?: string;
+    estimatedMinutes?: number;
+    exerciseOrderVersion?: number;
+    levelTag?: string;
+    learningObjectives?: string[];
+  };
+  targets: Array<{
+    contentRef: CurriculumContentRef;
+  }>;
+  supportingContext?: {
+    contextRef?: CurriculumContentRef;
+    promptText?: string;
+    translationHint?: string;
+  };
+  mediaRefs?: Record<string, { fieldPath: string } | string>;
+}
+
 export interface CourseAdminResponse {
   id: string;
   course_key: string;

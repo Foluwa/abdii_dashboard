@@ -8,6 +8,9 @@ import Toast from "@/components/ui/toast/Toast";
 import Alert from "@/components/ui/alert/Alert";
 import { StyledSelect } from "@/components/ui/form/StyledSelect";
 import { ConfirmationModal } from "@/components/ui/modal/ConfirmationModal";
+import { AudioWaveform } from "@/components/ui/audio/AudioWaveform";
+import { RegenerateAudioModal } from "@/components/modals/RegenerateAudioModal";
+import { scheduleQueuedAudioRefresh } from "@/lib/audioRegeneration";
 
 interface Phrase {
   id: string;
@@ -23,8 +26,200 @@ interface Phrase {
   cultural_notes?: string;
   is_published: boolean;
   audio_url?: string;
+  last_regeneration_status?: string | null;
+  last_regeneration_error?: string | null;
+  alignment_status?: AlignmentStatus | null;
+  alignment_updated_at?: string | null;
+  alignment_stale_reason?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+type AlignmentFilter = "all" | AlignmentStatus | "none";
+
+type AlignmentStatus = "draft" | "reviewed" | "approved" | "stale";
+
+const DEFAULT_WORD_ALIGNMENT_CONFIDENCE = 0.85;
+const DEFAULT_WORD_SNAP_STEP_MS = 25;
+
+const ALIGNMENT_FILTER_OPTIONS: Array<{ value: AlignmentFilter; label: string }> = [
+  { value: "all", label: "All Alignments" },
+  { value: "draft", label: "Draft" },
+  { value: "reviewed", label: "Reviewed" },
+  { value: "approved", label: "Approved" },
+  { value: "stale", label: "Stale" },
+  { value: "none", label: "No Alignment" },
+];
+
+const WORD_SNAP_STEP_OPTIONS = [10, 25, 50, 100];
+
+interface PhraseAlignmentSegment {
+  segment_id: string;
+  text: string;
+  start_ms: number;
+  end_ms: number;
+}
+
+interface PhraseAlignmentWord {
+  word: string;
+  start_ms: number;
+  end_ms: number;
+}
+
+interface PhraseAlignment {
+  id: string;
+  content_type: string;
+  content_id: string;
+  audio_url: string;
+  transcript_display: string;
+  status: AlignmentStatus;
+  confidence?: number | null;
+  version: number;
+  word_timing_reliable: boolean;
+  approved_at?: string | null;
+  stale_at?: string | null;
+  stale_reason?: string | null;
+  updated_at: string;
+  alignment_json: {
+    segments: PhraseAlignmentSegment[];
+    words: PhraseAlignmentWord[];
+  };
+}
+
+const createDefaultAlignmentSegment = (text: string): PhraseAlignmentSegment => ({
+  segment_id: "segment-1",
+  text,
+  start_ms: 0,
+  end_ms: 0,
+});
+
+const createDefaultAlignmentWord = (): PhraseAlignmentWord => ({
+  word: "",
+  start_ms: 0,
+  end_ms: 0,
+});
+
+const tokenizePhraseWords = (text: string): string[] => (
+  text.trim().split(/\s+/).filter(Boolean)
+);
+
+const seedAlignmentWords = (
+  text: string,
+  segment: PhraseAlignmentSegment,
+  existingWords: PhraseAlignmentWord[] = []
+): PhraseAlignmentWord[] => {
+  const tokens = tokenizePhraseWords(text);
+  if (tokens.length === 0) {
+    return [];
+  }
+
+  if (existingWords.length === tokens.length) {
+    return tokens.map((word, index) => ({
+      word,
+      start_ms: existingWords[index].start_ms,
+      end_ms: existingWords[index].end_ms,
+    }));
+  }
+
+  const duration = Math.max(segment.end_ms - segment.start_ms, tokens.length);
+  return tokens.map((word, index) => {
+    const start_ms = segment.start_ms + Math.floor((duration * index) / tokens.length);
+    const computedEnd = segment.start_ms + Math.floor((duration * (index + 1)) / tokens.length);
+    return {
+      word,
+      start_ms,
+      end_ms: Math.max(start_ms + 1, computedEnd),
+    };
+  });
+};
+
+const clampMs = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const spreadWordsAcrossSegment = (
+  words: PhraseAlignmentWord[],
+  segment: PhraseAlignmentSegment,
+): PhraseAlignmentWord[] => {
+  const tokens = words.map((word) => word.word.trim()).filter(Boolean);
+  if (tokens.length === 0) {
+    return [];
+  }
+
+  const duration = Math.max(segment.end_ms - segment.start_ms, tokens.length);
+  return tokens.map((word, index) => {
+    const start_ms = segment.start_ms + Math.floor((duration * index) / tokens.length);
+    const computedEnd = segment.start_ms + Math.floor((duration * (index + 1)) / tokens.length);
+    return {
+      word,
+      start_ms,
+      end_ms: Math.max(start_ms + 1, computedEnd),
+    };
+  });
+};
+
+function renderPhraseAlignmentBadge(phrase: Phrase) {
+  if (!phrase.alignment_status) {
+    return null;
+  }
+
+  const statusClasses = {
+    draft: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
+    reviewed: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200",
+    approved: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200",
+    stale: "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200",
+  };
+
+  const label = phrase.alignment_status.charAt(0).toUpperCase() + phrase.alignment_status.slice(1);
+  const detail = phrase.alignment_status === "stale" && phrase.alignment_stale_reason
+    ? `Alignment stale: ${phrase.alignment_stale_reason.replaceAll("_", " ")}`
+    : `Alignment ${phrase.alignment_status}`;
+
+  return (
+    <span
+      title={detail}
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClasses[phrase.alignment_status]}`}
+    >
+      {label} Alignment
+    </span>
+  );
+}
+
+function renderRegenerationBadge(status?: string | null, error?: string | null) {
+  if (!status) {
+    return null;
+  }
+
+  if (status === "queued") {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+        Audio queued
+      </span>
+    );
+  }
+
+  if (status === "processing") {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+        Audio processing
+      </span>
+    );
+  }
+
+  if (status !== "failed") {
+    return null;
+  }
+
+  return (
+    <span
+      title={error || "The latest audio regeneration attempt failed."}
+      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
+    >
+      Last regeneration failed
+    </span>
+  );
+}
+
+function isRegenerationPending(status?: string | null) {
+  return status === "queued" || status === "processing";
 }
 
 export default function PhrasesPage() {
@@ -36,10 +231,23 @@ export default function PhrasesPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingPhrase, setEditingPhrase] = useState<Phrase | null>(null);
+  const [alignmentRecord, setAlignmentRecord] = useState<PhraseAlignment | null>(null);
+  const [alignmentStatus, setAlignmentStatus] = useState<AlignmentStatus>("draft");
+  const [alignmentSegment, setAlignmentSegment] = useState<PhraseAlignmentSegment>(createDefaultAlignmentSegment(""));
+  const [alignmentWords, setAlignmentWords] = useState<PhraseAlignmentWord[]>([]);
+  const [alignmentConfidence, setAlignmentConfidence] = useState(DEFAULT_WORD_ALIGNMENT_CONFIDENCE);
+  const [wordSnapStepMs, setWordSnapStepMs] = useState(DEFAULT_WORD_SNAP_STEP_MS);
+  const [wordTimingsEnabled, setWordTimingsEnabled] = useState(false);
+  const [alignmentLoading, setAlignmentLoading] = useState(false);
+  const [alignmentSaving, setAlignmentSaving] = useState(false);
+  const [alignmentError, setAlignmentError] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [alignmentFilter, setAlignmentFilter] = useState<AlignmentFilter>("all");
   const limit = 20;
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; phrase: string } | null>(null);
+  const [showRegenerateModal, setShowRegenerateModal] = useState(false);
+  const [regeneratingTarget, setRegeneratingTarget] = useState<any | null>(null);
 
   const [formData, setFormData] = useState({
     language_id: "",
@@ -53,17 +261,30 @@ export default function PhrasesPage() {
     usage_context: "",
     cultural_notes: "",
     is_published: false,
+    audio_url: "",
   });
 
-  const fetchPhrases = async (languageId: string, currentPage: number = 1) => {
+  const fetchPhrases = async (
+    languageId: string,
+    currentPage: number = 1,
+    currentAlignmentFilter: AlignmentFilter = alignmentFilter,
+  ) => {
     if (!languageId) return;
     
     setLoading(true);
     setError("");
     try {
-      const response = await apiClient.get(
-        `/api/v1/admin/content/phrases?language_id=${languageId}&page=${currentPage}&page_size=${limit}`
-      );
+      const params = new URLSearchParams({
+        language_id: languageId,
+        page: String(currentPage),
+        page_size: String(limit),
+      });
+
+      if (currentAlignmentFilter !== "all") {
+        params.set("alignment_status", currentAlignmentFilter);
+      }
+
+      const response = await apiClient.get(`/api/v1/admin/content/phrases?${params.toString()}`);
       const data = response.data;
       setPhrases(data.items || []);
       setTotal(data.total || 0);
@@ -79,11 +300,27 @@ export default function PhrasesPage() {
   const handleLanguageChange = (languageId: string) => {
     setSelectedLanguage(languageId);
     setPage(1);
-    fetchPhrases(languageId, 1);
+    fetchPhrases(languageId, 1, alignmentFilter);
+  };
+
+  const handleAlignmentFilterChange = (nextFilter: AlignmentFilter) => {
+    setAlignmentFilter(nextFilter);
+    setPage(1);
+    if (selectedLanguage) {
+      fetchPhrases(selectedLanguage, 1, nextFilter);
+    }
   };
 
   const openCreateModal = () => {
     setEditingPhrase(null);
+    setAlignmentRecord(null);
+    setAlignmentStatus("draft");
+    setAlignmentSegment(createDefaultAlignmentSegment(""));
+    setAlignmentWords([]);
+    setAlignmentConfidence(DEFAULT_WORD_ALIGNMENT_CONFIDENCE);
+    setWordSnapStepMs(DEFAULT_WORD_SNAP_STEP_MS);
+    setWordTimingsEnabled(false);
+    setAlignmentError("");
     setFormData({
       language_id: selectedLanguage,
       phrase: "",
@@ -96,11 +333,49 @@ export default function PhrasesPage() {
       usage_context: "",
       cultural_notes: "",
       is_published: false,
+      audio_url: "",
     });
     setShowModal(true);
   };
 
-  const openEditModal = (phrase: Phrase) => {
+  const loadAlignment = async (phrase: Phrase) => {
+    setAlignmentLoading(true);
+    setAlignmentError("");
+    try {
+      const response = await apiClient.get<PhraseAlignment>(
+        `/api/v1/admin/content/phrases/${phrase.id}/alignment`
+      );
+      const alignment = response.data;
+      const firstSegment = alignment.alignment_json.segments[0] || createDefaultAlignmentSegment(phrase.phrase);
+      const words = alignment.alignment_json.words || [];
+      setAlignmentRecord(alignment);
+      setAlignmentStatus(alignment.status);
+      setAlignmentSegment({
+        segment_id: firstSegment.segment_id || "segment-1",
+        text: phrase.phrase,
+        start_ms: firstSegment.start_ms,
+        end_ms: firstSegment.end_ms,
+      });
+      setAlignmentWords(words);
+      setAlignmentConfidence(alignment.confidence ?? DEFAULT_WORD_ALIGNMENT_CONFIDENCE);
+      setWordTimingsEnabled(words.length > 0);
+    } catch (err: any) {
+      if (err.response?.status === 404) {
+        setAlignmentRecord(null);
+        setAlignmentStatus("draft");
+        setAlignmentSegment(createDefaultAlignmentSegment(phrase.phrase));
+        setAlignmentWords([]);
+        setAlignmentConfidence(DEFAULT_WORD_ALIGNMENT_CONFIDENCE);
+        setWordTimingsEnabled(false);
+      } else {
+        setAlignmentError(err.response?.data?.detail || "Failed to load phrase alignment");
+      }
+    } finally {
+      setAlignmentLoading(false);
+    }
+  };
+
+  const openEditModal = async (phrase: Phrase) => {
     setEditingPhrase(phrase);
     setFormData({
       language_id: phrase.language_id,
@@ -114,14 +389,156 @@ export default function PhrasesPage() {
       usage_context: phrase.usage_context || "",
       cultural_notes: phrase.cultural_notes || "",
       is_published: phrase.is_published,
+      audio_url: phrase.audio_url || "",
     });
+    setAlignmentRecord(null);
+    setAlignmentStatus("draft");
+    setAlignmentSegment(createDefaultAlignmentSegment(phrase.phrase));
+    setAlignmentWords([]);
+    setAlignmentConfidence(DEFAULT_WORD_ALIGNMENT_CONFIDENCE);
+    setWordSnapStepMs(DEFAULT_WORD_SNAP_STEP_MS);
+    setWordTimingsEnabled(false);
     setShowModal(true);
+    await loadAlignment(phrase);
   };
 
   const closeModal = () => {
     setShowModal(false);
     setEditingPhrase(null);
     setError("");
+    setAlignmentRecord(null);
+    setAlignmentWords([]);
+    setAlignmentConfidence(DEFAULT_WORD_ALIGNMENT_CONFIDENCE);
+    setWordTimingsEnabled(false);
+    setAlignmentError("");
+  };
+
+  const validateAlignmentWords = () => {
+    if (!wordTimingsEnabled) {
+      return null;
+    }
+
+    let previousWordEnd = -1;
+    for (const word of alignmentWords) {
+      if (!word.word.trim()) {
+        return "Word timings cannot include blank words";
+      }
+      if (word.end_ms <= word.start_ms) {
+        return "Word end time must be greater than start time";
+      }
+      if (word.start_ms < previousWordEnd) {
+        return "Word timings must be sorted and non-overlapping";
+      }
+      if (word.start_ms < alignmentSegment.start_ms || word.end_ms > alignmentSegment.end_ms) {
+        return "Word timings must stay within the segment window";
+      }
+      previousWordEnd = word.end_ms;
+    }
+
+    return null;
+  };
+
+  const syncWordsFromTranscript = () => {
+    if (alignmentSegment.end_ms <= alignmentSegment.start_ms) {
+      setAlignmentError("Set a valid segment start and end time before generating word timings");
+      return;
+    }
+
+    setAlignmentError("");
+    setWordTimingsEnabled(true);
+    setAlignmentWords(seedAlignmentWords(formData.phrase, alignmentSegment, alignmentWords));
+  };
+
+  const addAlignmentWord = () => {
+    if (alignmentSegment.end_ms <= alignmentSegment.start_ms) {
+      setAlignmentError("Set a valid segment start and end time before adding word timings");
+      return;
+    }
+
+    const fallbackStart = alignmentWords.length > 0
+      ? Math.min(alignmentWords[alignmentWords.length - 1].end_ms, alignmentSegment.end_ms - 1)
+      : alignmentSegment.start_ms;
+
+    setWordTimingsEnabled(true);
+    setAlignmentWords((current) => ([
+      ...current,
+      {
+        ...createDefaultAlignmentWord(),
+        start_ms: fallbackStart,
+        end_ms: Math.min(alignmentSegment.end_ms, fallbackStart + 100),
+      },
+    ]));
+  };
+
+  const redistributeAlignmentWords = () => {
+    if (alignmentSegment.end_ms <= alignmentSegment.start_ms) {
+      setAlignmentError("Set a valid segment start and end time before redistributing word timings");
+      return;
+    }
+
+    setAlignmentError("");
+    setWordTimingsEnabled(true);
+    setAlignmentWords((current) => {
+      const source = current.length > 0
+        ? current
+        : tokenizePhraseWords(formData.phrase).map((word) => ({ ...createDefaultAlignmentWord(), word }));
+      return spreadWordsAcrossSegment(source, alignmentSegment);
+    });
+  };
+
+  const shiftAlignmentWord = (index: number, deltaMs: number) => {
+    setAlignmentWords((current) => current.map((word, currentIndex) => {
+      if (currentIndex !== index) {
+        return word;
+      }
+
+      const duration = Math.max(1, word.end_ms - word.start_ms);
+      const minStart = currentIndex === 0 ? alignmentSegment.start_ms : current[currentIndex - 1].end_ms;
+      const maxEnd = currentIndex === current.length - 1 ? alignmentSegment.end_ms : current[currentIndex + 1].start_ms;
+      const maxStart = Math.max(minStart, maxEnd - duration);
+      const nextStart = clampMs(word.start_ms + deltaMs, minStart, maxStart);
+      return {
+        ...word,
+        start_ms: nextStart,
+        end_ms: Math.min(maxEnd, nextStart + duration),
+      };
+    }));
+  };
+
+  const snapAlignmentWordToBounds = (index: number) => {
+    setAlignmentWords((current) => current.map((word, currentIndex) => {
+      if (currentIndex !== index) {
+        return word;
+      }
+
+      const minStart = currentIndex === 0 ? alignmentSegment.start_ms : current[currentIndex - 1].end_ms;
+      const maxEnd = currentIndex === current.length - 1 ? alignmentSegment.end_ms : current[currentIndex + 1].start_ms;
+      if (maxEnd <= minStart) {
+        return word;
+      }
+
+      return {
+        ...word,
+        start_ms: minStart,
+        end_ms: Math.max(minStart + 1, maxEnd),
+      };
+    }));
+  };
+
+  const updateAlignmentWord = (
+    index: number,
+    field: keyof PhraseAlignmentWord,
+    value: string | number,
+  ) => {
+    setAlignmentWords((current) => current.map((word, currentIndex) => (
+      currentIndex === index
+        ? { ...word, [field]: value }
+        : word
+    )));
+  };
+
+  const removeAlignmentWord = (index: number) => {
+    setAlignmentWords((current) => current.filter((_, currentIndex) => currentIndex !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -137,15 +554,127 @@ export default function PhrasesPage() {
         setSuccessMessage("Phrase created successfully");
       }
       closeModal();
-      fetchPhrases(selectedLanguage, page);
+      fetchPhrases(selectedLanguage, page, alignmentFilter);
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (error: any) {
       setError(error.response?.data?.detail || "Failed to save phrase");
     }
   };
 
+  const saveAlignment = async (status: AlignmentStatus) => {
+    if (!editingPhrase) return;
+    if (!formData.audio_url.trim()) {
+      setAlignmentError("Add an audio URL before saving alignment timings");
+      return;
+    }
+    if (alignmentSegment.end_ms <= alignmentSegment.start_ms) {
+      setAlignmentError("Alignment end time must be greater than start time");
+      return;
+    }
+
+    const wordValidationError = validateAlignmentWords();
+    if (wordValidationError) {
+      setAlignmentError(wordValidationError);
+      return;
+    }
+
+    setAlignmentSaving(true);
+    setAlignmentError("");
+    try {
+      const response = await apiClient.put<PhraseAlignment>(
+        `/api/v1/admin/content/phrases/${editingPhrase.id}/alignment`,
+        {
+          audio_url: formData.audio_url,
+          status,
+          confidence: wordTimingsEnabled ? alignmentConfidence : null,
+          segments: [
+            {
+              ...alignmentSegment,
+              text: formData.phrase,
+            },
+          ],
+          words: wordTimingsEnabled ? alignmentWords : [],
+        }
+      );
+      setAlignmentRecord(response.data);
+      setAlignmentStatus(response.data.status);
+      setAlignmentWords(response.data.alignment_json.words || []);
+      setAlignmentConfidence(response.data.confidence ?? DEFAULT_WORD_ALIGNMENT_CONFIDENCE);
+      setWordTimingsEnabled((response.data.alignment_json.words || []).length > 0);
+      if (selectedLanguage) {
+        fetchPhrases(selectedLanguage, page, alignmentFilter);
+      }
+      setSuccessMessage(status === "reviewed" ? "Alignment saved for review" : "Alignment saved");
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err: any) {
+      setAlignmentError(err.response?.data?.detail || "Failed to save alignment");
+    } finally {
+      setAlignmentSaving(false);
+    }
+  };
+
+  const approveAlignment = async () => {
+    if (!editingPhrase) return;
+
+    setAlignmentSaving(true);
+    setAlignmentError("");
+    try {
+      const response = await apiClient.post<PhraseAlignment>(
+        `/api/v1/admin/content/phrases/${editingPhrase.id}/alignment/approve`,
+        {}
+      );
+      setAlignmentRecord(response.data);
+      setAlignmentStatus(response.data.status);
+      setAlignmentWords(response.data.alignment_json.words || []);
+      setAlignmentConfidence(response.data.confidence ?? DEFAULT_WORD_ALIGNMENT_CONFIDENCE);
+      setWordTimingsEnabled((response.data.alignment_json.words || []).length > 0);
+      if (selectedLanguage) {
+        fetchPhrases(selectedLanguage, page, alignmentFilter);
+      }
+      setSuccessMessage("Alignment approved for mobile playback");
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err: any) {
+      setAlignmentError(err.response?.data?.detail || "Failed to approve alignment");
+    } finally {
+      setAlignmentSaving(false);
+    }
+  };
+
+  const renderAlignmentStatus = () => {
+    const status = alignmentRecord?.status || alignmentStatus;
+    const statusClasses = {
+      draft: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
+      reviewed: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200",
+      approved: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200",
+      stale: "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200",
+    };
+
+    return (
+      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${statusClasses[status]}`}>
+        {status.charAt(0).toUpperCase() + status.slice(1)}
+      </span>
+    );
+  };
+
   const handleDeleteClick = (phraseId: string, phraseText: string) => {
     setDeleteConfirm({ id: phraseId, phrase: phraseText });
+  };
+
+  const handleRegenerateAudio = (phrase: Phrase) => {
+    if (isRegenerationPending(phrase.last_regeneration_status)) {
+      return;
+    }
+
+    const languageCode = languages.find((lang: any) => lang.id === phrase.language_id)?.iso_639_3 || "yor";
+    setRegeneratingTarget({
+      id: phrase.id,
+      contentType: "phrase",
+      displayText: phrase.phrase,
+      defaultText: phrase.phrase,
+      languageCode,
+      submitEndpoint: `/api/v1/admin/content/phrases/${phrase.id}/regenerate-audio`,
+    });
+    setShowRegenerateModal(true);
   };
 
   const handleDelete = async () => {
@@ -155,7 +684,7 @@ export default function PhrasesPage() {
       await apiClient.delete(`/api/v1/admin/content/phrases/${deleteConfirm.id}`);
       setSuccessMessage("Phrase deleted successfully");
       setDeleteConfirm(null);
-      fetchPhrases(selectedLanguage, page);
+      fetchPhrases(selectedLanguage, page, alignmentFilter);
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (error: any) {
       setError(error.response?.data?.detail || "Failed to delete phrase");
@@ -192,7 +721,7 @@ export default function PhrasesPage() {
       </div>
 
       {/* Language Selector */}
-      <div className="mb-6 max-w-md">
+      <div className="mb-6 grid gap-4 max-w-3xl md:grid-cols-2">
         <StyledSelect
           label="Select Language"
           value={selectedLanguage}
@@ -204,6 +733,13 @@ export default function PhrasesPage() {
               label: `${lang.name} (${lang.native_name})`
             }))
           ]}
+          fullWidth
+        />
+        <StyledSelect
+          label="Alignment Filter"
+          value={alignmentFilter}
+          onChange={(e) => handleAlignmentFilterChange(e.target.value as AlignmentFilter)}
+          options={ALIGNMENT_FILTER_OPTIONS}
           fullWidth
         />
       </div>
@@ -247,6 +783,9 @@ export default function PhrasesPage() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
                         Status
                       </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                        Audio
+                      </th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
                         Actions
                       </th>
@@ -286,8 +825,44 @@ export default function PhrasesPage() {
                           >
                             {phrase.is_published ? "Published" : "Draft"}
                           </span>
+                          {phrase.alignment_status && (
+                            <div className="mt-2">
+                              {renderPhraseAlignmentBadge(phrase)}
+                            </div>
+                          )}
+                          {phrase.last_regeneration_status && (
+                            <div className="mt-2">
+                              {renderRegenerationBadge(phrase.last_regeneration_status, phrase.last_regeneration_error)}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          {phrase.audio_url ? (
+                            <div className="min-w-[280px] max-w-md">
+                              <AudioWaveform
+                                src={phrase.audio_url}
+                                height={40}
+                                waveColor="#94a3b8"
+                                progressColor="#3b82f6"
+                                cursorColor="#1d4ed8"
+                              />
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400 dark:text-gray-500">No audio</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-right space-x-2">
+                          <button
+                            onClick={() => handleRegenerateAudio(phrase)}
+                            disabled={isRegenerationPending(phrase.last_regeneration_status)}
+                            className="text-brand-600 hover:text-brand-800 dark:text-brand-400 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {phrase.last_regeneration_status === "queued"
+                              ? "Queued"
+                              : phrase.last_regeneration_status === "processing"
+                                ? "Processing..."
+                                : "Regenerate Audio"}
+                          </button>
                           <button
                             onClick={() => openEditModal(phrase)}
                             className="text-blue-600 hover:text-blue-800 dark:text-blue-400 text-sm"
@@ -315,14 +890,14 @@ export default function PhrasesPage() {
                   </div>
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => fetchPhrases(selectedLanguage, page - 1)}
+                      onClick={() => fetchPhrases(selectedLanguage, page - 1, alignmentFilter)}
                       disabled={page === 1}
                       className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded disabled:opacity-50"
                     >
                       Previous
                     </button>
                     <button
-                      onClick={() => fetchPhrases(selectedLanguage, page + 1)}
+                      onClick={() => fetchPhrases(selectedLanguage, page + 1, alignmentFilter)}
                       disabled={page === totalPages}
                       className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded disabled:opacity-50"
                     >
@@ -392,8 +967,40 @@ export default function PhrasesPage() {
                     >
                       {phrase.is_published ? "Published" : "Draft"}
                     </span>
+                    {renderPhraseAlignmentBadge(phrase)}
                   </div>
+                  {(phrase.last_regeneration_status || phrase.audio_url) && (
+                    <div className="mb-3 space-y-2">
+                      {phrase.last_regeneration_status &&
+                        renderRegenerationBadge(phrase.last_regeneration_status, phrase.last_regeneration_error)}
+                      {phrase.audio_url ? (
+                        <div>
+                          <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">
+                            Audio
+                          </div>
+                          <AudioWaveform
+                            src={phrase.audio_url}
+                            height={40}
+                            waveColor="#94a3b8"
+                            progressColor="#3b82f6"
+                            cursorColor="#1d4ed8"
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 border-t border-gray-200 dark:border-gray-700 pt-3">
+                    <button
+                      onClick={() => handleRegenerateAudio(phrase)}
+                      disabled={isRegenerationPending(phrase.last_regeneration_status)}
+                      className="flex-1 px-4 py-2 text-sm font-medium text-brand-600 bg-brand-50 hover:bg-brand-100 dark:bg-brand-900/20 dark:text-brand-400 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {phrase.last_regeneration_status === "queued"
+                        ? "Queued"
+                        : phrase.last_regeneration_status === "processing"
+                          ? "Processing..."
+                          : "Regenerate"}
+                    </button>
                     <button
                       onClick={() => openEditModal(phrase)}
                       className="flex-1 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 rounded-lg"
@@ -464,6 +1071,19 @@ export default function PhrasesPage() {
                     value={formData.literal_translation}
                     onChange={(e) => setFormData({ ...formData, literal_translation: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Audio URL
+                  </label>
+                  <input
+                    type="url"
+                    value={formData.audio_url}
+                    onChange={(e) => setFormData({ ...formData, audio_url: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="https://cdn.example.com/audio/phrase.mp3"
                   />
                 </div>
 
@@ -545,6 +1165,310 @@ export default function PhrasesPage() {
                 </div>
               </div>
 
+              {editingPhrase && (
+                <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-900/30 p-4 space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Phrase Alignment</h3>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        Segment timing stays primary. Word timings are an optional second pass for higher-fidelity karaoke playback.
+                      </p>
+                    </div>
+                    {renderAlignmentStatus()}
+                  </div>
+
+                  {(alignmentError || alignmentLoading) && (
+                    alignmentLoading ? (
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Loading alignment...</div>
+                    ) : (
+                      <Alert variant="error" title="Alignment" message={alignmentError} />
+                    )
+                  )}
+
+                  {alignmentRecord?.status === "stale" && alignmentRecord.stale_reason && (
+                    <Alert
+                      variant="warning"
+                      title="Alignment is stale"
+                      message={`This alignment needs review because ${alignmentRecord.stale_reason.replaceAll("_", " ")}.`}
+                    />
+                  )}
+
+                  {formData.audio_url ? (
+                    <AudioWaveform src={formData.audio_url} className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3" />
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 p-4 text-sm text-gray-600 dark:text-gray-400">
+                      Add an audio URL to preview the phrase waveform and save timings.
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Segment Start (ms)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={alignmentSegment.start_ms}
+                        onChange={(e) => setAlignmentSegment((current) => ({
+                          ...current,
+                          text: formData.phrase,
+                          start_ms: Number(e.target.value || 0),
+                        }))}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Segment End (ms)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={alignmentSegment.end_ms}
+                        onChange={(e) => setAlignmentSegment((current) => ({
+                          ...current,
+                          text: formData.phrase,
+                          end_ms: Number(e.target.value || 0),
+                        }))}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-3 py-2">
+                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
+                      Transcript
+                    </div>
+                    <div className="text-sm text-gray-900 dark:text-white">{formData.phrase || "Phrase text will appear here"}</div>
+                  </div>
+
+                  <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 space-y-3">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">Optional Word Timings</div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                          Add word-level timing only when you want a second pass after segment review.
+                        </div>
+                      </div>
+                      <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                        <input
+                          type="checkbox"
+                          checked={wordTimingsEnabled}
+                          onChange={(e) => {
+                            const enabled = e.target.checked;
+                            setWordTimingsEnabled(enabled);
+                            if (enabled && alignmentWords.length === 0 && formData.phrase.trim()) {
+                              syncWordsFromTranscript();
+                            }
+                          }}
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                        />
+                        Enable word timings
+                      </label>
+                    </div>
+
+                    {(wordTimingsEnabled || alignmentRecord?.word_timing_reliable || alignmentWords.length > 0) && (
+                      <div className="text-xs text-gray-600 dark:text-gray-400">
+                        {wordTimingsEnabled
+                          ? alignmentConfidence >= DEFAULT_WORD_ALIGNMENT_CONFIDENCE
+                            ? "Saving now will mark these word timings reliable."
+                            : "Saving now will keep these word timings editable but not marked reliable yet."
+                          : alignmentRecord?.word_timing_reliable
+                            ? "Current word timings are marked reliable."
+                            : "Word timings are stored but still optional for playback."}
+                      </div>
+                    )}
+
+                    {wordTimingsEnabled && (
+                      <>
+                        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              Word Timing Confidence
+                            </label>
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="range"
+                                min={0}
+                                max={1}
+                                step={0.05}
+                                value={alignmentConfidence}
+                                onChange={(e) => setAlignmentConfidence(Number(e.target.value))}
+                                className="w-full"
+                              />
+                              <span className="min-w-12 text-sm font-medium text-gray-900 dark:text-white">
+                                {alignmentConfidence.toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                              {alignmentConfidence >= DEFAULT_WORD_ALIGNMENT_CONFIDENCE
+                                ? "Reliable threshold met for word-level playback helpers."
+                                : "Below 0.85, word timings stay editable but are not marked reliable."}
+                            </div>
+                          </div>
+
+                          <div>
+                            <StyledSelect
+                              label="Snap Step"
+                              value={wordSnapStepMs}
+                              onChange={(e) => setWordSnapStepMs(Number(e.target.value))}
+                              options={WORD_SNAP_STEP_OPTIONS.map((step) => ({
+                                value: step,
+                                label: `${step} ms`,
+                              }))}
+                              fullWidth
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={syncWordsFromTranscript}
+                            className="px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+                          >
+                            Split From Transcript
+                          </button>
+                          <button
+                            type="button"
+                            onClick={addAlignmentWord}
+                            className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                          >
+                            Add Word
+                          </button>
+                          <button
+                            type="button"
+                            onClick={redistributeAlignmentWords}
+                            className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                          >
+                            Redistribute Evenly
+                          </button>
+                        </div>
+
+                        <div className="text-xs text-gray-600 dark:text-gray-400">
+                          Use the waveform as the visual anchor, then shift words by the snap step or snap a word directly to its neighboring bounds.
+                        </div>
+
+                        <div className="space-y-3">
+                          {alignmentWords.length === 0 ? (
+                            <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 p-3 text-sm text-gray-600 dark:text-gray-400">
+                              No word timings yet. Use “Split From Transcript” to seed them from the phrase.
+                            </div>
+                          ) : alignmentWords.map((word, index) => (
+                            <div key={`${index}-${word.word}`} className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,2fr)_120px_120px_minmax(0,220px)_auto] xl:items-end">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                  Word {index + 1}
+                                </label>
+                                <input
+                                  type="text"
+                                  value={word.word}
+                                  onChange={(e) => updateAlignmentWord(index, "word", e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                  Start (ms)
+                                </label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={word.start_ms}
+                                  onChange={(e) => updateAlignmentWord(index, "start_ms", Number(e.target.value || 0))}
+                                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                  End (ms)
+                                </label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={word.end_ms}
+                                  onChange={(e) => updateAlignmentWord(index, "end_ms", Number(e.target.value || 0))}
+                                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                  Snap Helpers
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => shiftAlignmentWord(index, -wordSnapStepMs)}
+                                    className="px-2.5 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                  >
+                                    -{wordSnapStepMs} ms
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => shiftAlignmentWord(index, wordSnapStepMs)}
+                                    className="px-2.5 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                  >
+                                    +{wordSnapStepMs} ms
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => snapAlignmentWordToBounds(index)}
+                                    className="px-2.5 py-2 rounded-lg border border-indigo-300 text-xs text-indigo-700 hover:bg-indigo-50 dark:border-indigo-700 dark:text-indigo-300 dark:hover:bg-indigo-900/20"
+                                  >
+                                    Snap To Bounds
+                                  </button>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeAlignmentWord(index)}
+                                className="px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => saveAlignment("draft")}
+                      disabled={alignmentSaving}
+                      className="px-3 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60"
+                    >
+                      Save Draft
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => saveAlignment("reviewed")}
+                      disabled={alignmentSaving}
+                      className="px-3 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-60"
+                    >
+                      Save Reviewed
+                    </button>
+                    <button
+                      type="button"
+                      onClick={approveAlignment}
+                      disabled={alignmentSaving || !alignmentRecord}
+                      className="px-3 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-60"
+                    >
+                      Approve
+                    </button>
+                    {alignmentRecord && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        Version {alignmentRecord.version} · Updated {new Date(alignmentRecord.updated_at).toLocaleString()}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-end space-x-3 pt-4">
                 <button
                   type="button"
@@ -575,6 +1499,33 @@ export default function PhrasesPage() {
         confirmText="Delete"
         cancelText="Cancel"
         variant="danger"
+      />
+
+      <RegenerateAudioModal
+        isOpen={showRegenerateModal}
+        onClose={() => {
+          setShowRegenerateModal(false);
+          setRegeneratingTarget(null);
+        }}
+        target={regeneratingTarget}
+        onSuccess={() => {
+          if (regeneratingTarget?.id) {
+            setPhrases((current) =>
+              current.map((phrase) =>
+                phrase.id === regeneratingTarget.id
+                  ? {
+                      ...phrase,
+                      last_regeneration_status: "queued",
+                      last_regeneration_error: null,
+                    }
+                  : phrase
+              )
+            );
+          }
+          scheduleQueuedAudioRefresh(() => {
+            fetchPhrases(selectedLanguage, page, alignmentFilter);
+          });
+        }}
       />
     </div>
   );

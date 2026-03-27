@@ -793,55 +793,67 @@ export default function AdminLessonBlueprintDetailPage({
           </button>
 
           {isVersionHistoryOpen && (
-            <div className="mt-4 flex h-[640px] min-h-0 flex-col overflow-hidden">
+            <div className="mt-4 grid h-[640px] min-h-0 gap-4 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
               {versionHistory.length === 0 ? (
                 <div className="text-sm text-gray-600 dark:text-gray-400">No history snapshots found yet.</div>
               ) : (
                 <>
-                  <div className="max-h-[240px] space-y-2 overflow-y-auto pr-1">
-                    {versionHistory.map((version) => (
-                      <div
-                        key={version.id}
-                        className={`rounded-lg border p-3 ${
-                          selectedVersionId === version.id
-                            ? 'border-brand-300 bg-brand-50 dark:border-brand-800 dark:bg-brand-950/20'
-                            : 'border-gray-200 dark:border-gray-800'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                              v{version.version_number} • {version.event_type}
+                  <div className="flex min-h-0 flex-col rounded-lg border border-gray-200 p-3 dark:border-gray-800">
+                    <div>
+                      <div className="text-sm font-semibold text-gray-900 dark:text-white">Snapshot History</div>
+                      <div className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                        Snapshot history used for restore, compare, and restore workflows.
+                      </div>
+                    </div>
+                    <div className="mt-4 min-h-0 space-y-2 overflow-y-auto pr-1">
+                      {versionHistory.map((version) => (
+                        <div
+                          key={version.id}
+                          className={`rounded-lg border p-3 ${
+                            selectedVersionId === version.id
+                              ? 'border-brand-300 bg-brand-50 dark:border-brand-800 dark:bg-brand-950/20'
+                              : 'border-gray-200 dark:border-gray-800'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                                v{version.version_number} • {version.event_type}
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                {new Date(version.created_at).toLocaleString()}
+                              </div>
                             </div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              {new Date(version.created_at).toLocaleString()}
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                onClick={() => handleLoadVersionDiff(version.id)}
+                                className="rounded-lg border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                              >
+                                Compare
+                              </button>
+                              <button
+                                onClick={() => handleRestoreVersion(version.id)}
+                                disabled={isRestoringVersion}
+                                className="rounded-lg border border-brand-300 px-2 py-1 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950/30"
+                              >
+                                Restore
+                              </button>
                             </div>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              onClick={() => handleLoadVersionDiff(version.id)}
-                              className="rounded-lg border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-                            >
-                              Compare
-                            </button>
-                            <button
-                              onClick={() => handleRestoreVersion(version.id)}
-                              disabled={isRestoringVersion}
-                              className="rounded-lg border border-brand-300 px-2 py-1 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950/30"
-                            >
-                              Restore
-                            </button>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
 
-                  <div className="mt-4 min-h-0 flex-1 overflow-hidden rounded-lg border border-gray-200 p-3 dark:border-gray-800">
-                    {!versionDiff ? (
-                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                  <div className="min-h-0 overflow-hidden rounded-lg border border-gray-200 p-3 dark:border-gray-800">
+                    <div className="mb-4">
+                      <div className="text-sm font-semibold text-gray-900 dark:text-white">Compare Snapshot</div>
+                      <div className="mt-1 text-sm text-gray-600 dark:text-gray-400">
                         Select a snapshot to compare it against the current blueprint.
                       </div>
+                    </div>
+                    {!versionDiff ? (
+                      <div className="text-sm text-gray-600 dark:text-gray-400">No snapshot selected yet.</div>
                     ) : (
                       <div className="flex h-full min-h-0 flex-col space-y-4">
                         <div>
@@ -856,7 +868,7 @@ export default function AdminLessonBlueprintDetailPage({
                             )}
                           </div>
                         </div>
-                        <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-1">
+                        <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-2">
                           <div className="min-h-0">
                             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                               Snapshot

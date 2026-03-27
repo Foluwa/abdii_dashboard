@@ -2,8 +2,8 @@
 
 import React, { useMemo } from 'react';
 
-import StatusBadge from '@/components/admin/StatusBadge';
 import MediaLinkPreview from '@/components/admin/curriculum/MediaLinkPreview';
+import StatusBadge from '@/components/admin/StatusBadge';
 import { useCurriculumVocabLibrary } from '@/hooks/useApi';
 import type { AvailabilityStatus } from '@/types/curriculum';
 
@@ -60,6 +60,15 @@ function asObjectList(value: unknown): Array<Record<string, unknown>> {
     (item): item is Record<string, unknown> =>
       typeof item === 'object' && item !== null && !Array.isArray(item)
   );
+}
+
+function asObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function asContentRefList(value: unknown): Array<Record<string, unknown>> {
+  return asObjectList(value).filter((item) => asString(item.contentType) && asString(item.contentId));
 }
 
 function humanizeIdentifier(value: string): string {
@@ -250,6 +259,34 @@ function collectTopLevelMedia(payload: Record<string, unknown>) {
     .filter((item): item is { label: string; value: string } => Boolean(item.value));
 }
 
+function collectCompactReadingTargetRefs(payload: Record<string, unknown>) {
+  const directRefs = asContentRefList(payload.targetContentRefs);
+  if (directRefs.length > 0) {
+    return directRefs;
+  }
+
+  return asObjectList(payload.targets)
+    .map((item) => item.contentRef)
+    .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object' && !Array.isArray(item)));
+}
+
+function collectCompactReadingMediaRefs(payload: Record<string, unknown>) {
+  const mediaRefs = payload.mediaRefs;
+  if (!mediaRefs || typeof mediaRefs !== 'object' || Array.isArray(mediaRefs)) {
+    return [] as Array<{ label: string; fieldPath: string }>;
+  }
+
+  return Object.entries(mediaRefs)
+    .map(([key, value]) => ({
+      label: humanizeIdentifier(key),
+      fieldPath:
+        asString(value) ||
+        asString((value as Record<string, unknown> | null)?.fieldPath) ||
+        '',
+    }))
+    .filter((item) => item.fieldPath);
+}
+
 export function LessonRuntimePreview({
   blueprint,
   heading,
@@ -282,6 +319,8 @@ export function LessonRuntimePreview({
   const range = asNumberArray(payload.range);
   const steps = asObjectList(payload.steps);
   const media = collectTopLevelMedia(payload);
+  const readingTargetRefs = collectCompactReadingTargetRefs(payload);
+  const readingMediaRefs = collectCompactReadingMediaRefs(payload);
   const title =
     asString(payload.title) || asString(payload.id) || blueprint.blueprint_key || 'Untitled lesson';
   const subtitle = asString(payload.description) || asString(payload.subtitle) || null;
@@ -290,6 +329,7 @@ export function LessonRuntimePreview({
   const contrastId = asString(payload.contrast_id);
   const unitLabel = asString(payload.unitLabel);
   const includeCultureTip = asBoolean(payload.includeCultureTip);
+  const compactSupportingContext = asObject((payload.supportingContext as Record<string, unknown> | undefined)?.contextRef);
 
   return (
     <div className="space-y-4">
@@ -360,6 +400,41 @@ export function LessonRuntimePreview({
                 </div>
               </div>
             ) : null}
+            {readingTargetRefs.length > 0 ? (
+              <div>
+                <div className="font-medium">Phrase targets</div>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {readingTargetRefs.map((item, index) => (
+                    <span
+                      key={`${asString(item.contentId) || 'target'}-${index}`}
+                      className="rounded-full border border-gray-300 bg-white px-2 py-1 text-xs dark:border-gray-700 dark:bg-gray-900"
+                      title={asString(item.contentId) || undefined}
+                    >
+                      {asString(item.contentType) || 'content'}: {asString(item.contentId) || 'unknown'}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {compactSupportingContext ? (
+              <div>
+                <span className="font-medium">Supporting context:</span>{' '}
+                {asString(compactSupportingContext.contentType) || 'content'} /{' '}
+                {asString(compactSupportingContext.contentId) || 'unknown'}
+              </div>
+            ) : null}
+            {readingMediaRefs.length > 0 ? (
+              <div>
+                <div className="font-medium">Managed media refs</div>
+                <div className="mt-1 space-y-1">
+                  {readingMediaRefs.map((item) => (
+                    <div key={`${item.label}-${item.fieldPath}`} className="text-xs text-gray-500 dark:text-gray-400">
+                      {item.label}: {item.fieldPath}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -400,7 +475,7 @@ export function LessonRuntimePreview({
           </div>
           <div className="mt-3 space-y-2 text-sm text-gray-700 dark:text-gray-200">
             {media.map((item) => (
-              <MediaLinkPreview key={item.label} label={item.label} url={item.value} compact={compact} />
+              <MediaLinkPreview key={item.label} url={item.value} label={item.label} compact />
             ))}
           </div>
         </div>
@@ -440,12 +515,7 @@ export function LessonRuntimePreview({
                   {stepMedia.length > 0 ? (
                     <div className="mt-3 space-y-2">
                       {stepMedia.map((item) => (
-                        <MediaLinkPreview
-                          key={item.label}
-                          label={item.label}
-                          url={item.value}
-                          compact
-                        />
+                        <MediaLinkPreview key={item.label} url={item.value} label={item.label} compact />
                       ))}
                     </div>
                   ) : null}

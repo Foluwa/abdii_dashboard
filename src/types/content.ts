@@ -66,6 +66,8 @@ export interface Phrase {
   published_at: string | null;
   audio_url: string | null;
   audio_duration_sec: number | null;
+  last_regeneration_status?: string | null;
+  last_regeneration_error?: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;

@@ -25,6 +25,11 @@ import type {
 } from '@/types/curriculum';
 import type { AdminAuditLogListResponse } from '@/types/audit-log';
 import type { CurriculumOpsMetricsResponse } from '@/types/admin-analytics';
+import type {
+  OrphanAssetCandidateListResponse,
+  OrphanAssetScanListResponse,
+  OrphanAssetSummaryResponse,
+} from '@/types/orphan-assets';
 import {
   SystemStatus,
   SystemStats,
@@ -625,6 +630,101 @@ export function useAdminAuditLogList(filters?: AdminAuditLogListFilters) {
     revalidateOnReconnect: false,
     shouldRetryOnError: false,
   });
+
+  return {
+    data,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+    mutate,
+  };
+}
+
+
+export interface AdminOrphanAssetCandidateFilters {
+  page?: number;
+  limit?: number;
+  asset_type?: string;
+  prefix?: string;
+  status?: string;
+  min_age_days?: number;
+  max_age_days?: number;
+  min_size_bytes?: number;
+  max_size_bytes?: number;
+  q?: string;
+}
+
+export function useAdminOrphanAssetSummary() {
+  const { data, error, mutate } = useSWR<OrphanAssetSummaryResponse>(
+    '/api/v1/admin/orphan-assets/summary',
+    fetcher,
+    {
+      refreshInterval: 0,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      shouldRetryOnError: false,
+    }
+  );
+
+  return {
+    data,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+    mutate,
+  };
+}
+
+export function useAdminOrphanAssetScans(filters?: { page?: number; limit?: number }) {
+  const params = new URLSearchParams();
+  if (filters?.page) params.set('page', String(filters.page));
+  if (filters?.limit) params.set('limit', String(filters.limit));
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+
+  const { data, error, mutate } = useSWR<OrphanAssetScanListResponse>(
+    `/api/v1/admin/orphan-assets/scans${suffix}`,
+    fetcher,
+    {
+      refreshInterval: 0,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      shouldRetryOnError: false,
+    }
+  );
+
+  return {
+    data,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+    mutate,
+  };
+}
+
+export function useAdminOrphanAssetCandidates(filters?: AdminOrphanAssetCandidateFilters) {
+  const params = new URLSearchParams();
+  if (filters?.page) params.set('page', String(filters.page));
+  if (filters?.limit) params.set('limit', String(filters.limit));
+  if (filters?.asset_type) params.set('asset_type', filters.asset_type);
+  if (filters?.prefix) params.set('prefix', filters.prefix);
+  if (filters?.status) params.set('status', filters.status);
+  if (typeof filters?.min_age_days === 'number') params.set('min_age_days', String(filters.min_age_days));
+  if (typeof filters?.max_age_days === 'number') params.set('max_age_days', String(filters.max_age_days));
+  if (typeof filters?.min_size_bytes === 'number') params.set('min_size_bytes', String(filters.min_size_bytes));
+  if (typeof filters?.max_size_bytes === 'number') params.set('max_size_bytes', String(filters.max_size_bytes));
+  if (filters?.q) params.set('q', filters.q);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+
+  const { data, error, mutate } = useSWR<OrphanAssetCandidateListResponse>(
+    `/api/v1/admin/orphan-assets/candidates${suffix}`,
+    fetcher,
+    {
+      refreshInterval: 0,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      shouldRetryOnError: false,
+    }
+  );
 
   return {
     data,

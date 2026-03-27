@@ -230,13 +230,15 @@ export interface Word {
 }
 
 export interface Proverb {
-  id: number;
+  id: string; // UUID
   language_id: number;
   proverb: string;
   translation: string;
   meaning: string | null;
   category: string | null;
   audio_url?: string | null;
+  last_regeneration_status?: string | null;
+  last_regeneration_error?: string | null;
   created_at: string;
   updated_at: string;
 }

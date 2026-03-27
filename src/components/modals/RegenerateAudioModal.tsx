@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { apiClient } from "@/lib/api";
 import { useToast } from "@/contexts/ToastContext";
 import { Modal } from "@/components/ui/modal";
@@ -8,70 +8,128 @@ import { FiVolume2 } from "react-icons/fi";
 
 interface Voice {
   id: string;
-  name: string;
+  display_name?: string;
+  name?: string;
+  voice_code?: string;
   provider: string;
   language_code: string;
+}
+
+export interface RegenerateAudioTarget {
+  id: string;
+  contentType: "word" | "phrase" | "proverb";
+  displayText: string;
+  defaultText: string;
+  languageCode: string;
+  submitEndpoint: string;
 }
 
 interface RegenerateAudioModalProps {
   isOpen: boolean;
   onClose: () => void;
-  word: {
-    id: string;
-    lemma: string;
-    language_code: string;
-  } | null;
+  target: RegenerateAudioTarget | null;
   onSuccess?: () => void;
 }
 
-export function RegenerateAudioModal({ isOpen, onClose, word, onSuccess }: RegenerateAudioModalProps) {
+const LANGUAGE_CODE_MAP: Record<string, string> = {
+  yor: "yo",
+  eng: "en",
+  hau: "ha",
+  ibo: "ig",
+  swa: "sw",
+};
+
+const getVoiceLabel = (voice: Voice) => (
+  voice.display_name || voice.name || voice.voice_code || "Unknown Voice"
+);
+
+// Helper to format error messages (handles both string and object errors)
+const formatErrorMessage = (error: any, fallbackMessage: string): string => {
+  const detail = error?.response?.data?.detail;
+  
+  // If detail is a string, return it
+  if (typeof detail === 'string') {
+    return detail;
+  }
+  
+  // If detail is an array (Pydantic validation errors)
+  if (Array.isArray(detail) && detail.length > 0) {
+    // Extract first error message
+    const firstError = detail[0];
+    return firstError.msg || firstError.message || JSON.stringify(firstError);
+  }
+  
+  // If detail is an object, try to extract a message
+  if (typeof detail === 'object' && detail !== null) {
+    return detail.msg || detail.message || JSON.stringify(detail);
+  }
+  
+  // Fallback to error message or default
+  return error?.message || fallbackMessage;
+};
+
+export function RegenerateAudioModal({ isOpen, onClose, target, onSuccess }: RegenerateAudioModalProps) {
   const toast = useToast();
   const [voices, setVoices] = useState<Voice[]>([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>("");
+  const [selectedProvider, setSelectedProvider] = useState<string>("all");
   const [textOverride, setTextOverride] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingVoices, setIsLoadingVoices] = useState(false);
 
   useEffect(() => {
-    if (isOpen && word) {
-      setTextOverride(word.lemma); // Default to word text
+    if (isOpen && target) {
+      setTextOverride(target.defaultText);
+      setSelectedProvider("all");
       fetchVoices();
     }
-  }, [isOpen, word]);
+  }, [isOpen, target]);
+
+  const providerOptions = useMemo(() => {
+    const uniqueProviders = Array.from(new Set(voices.map((voice) => voice.provider))).sort();
+    return ["all", ...uniqueProviders];
+  }, [voices]);
+
+  const filteredVoices = useMemo(() => {
+    if (selectedProvider === "all") {
+      return voices;
+    }
+    return voices.filter((voice) => voice.provider === selectedProvider);
+  }, [voices, selectedProvider]);
+
+  useEffect(() => {
+    if (filteredVoices.length === 0) {
+      setSelectedVoiceId("");
+      return;
+    }
+
+    const selectedStillVisible = filteredVoices.some((voice) => voice.id === selectedVoiceId);
+    if (!selectedStillVisible) {
+      setSelectedVoiceId(filteredVoices[0].id);
+    }
+  }, [filteredVoices, selectedVoiceId]);
 
   const fetchVoices = async () => {
-    if (!word) return;
+    if (!target) return;
     
     setIsLoadingVoices(true);
     try {
-      // Map ISO 639-3 to ISO 639-1 for TTS providers
-      const languageCodeMap: { [key: string]: string } = {
-        'yor': 'yo',  // Yoruba
-        'eng': 'en',  // English
-        'hau': 'ha',  // Hausa
-        'ibo': 'ig',  // Igbo
-        'swa': 'sw',  // Swahili
-      };
-      
-      const ttsLanguageCode = languageCodeMap[word.language_code] || word.language_code;
+      const ttsLanguageCode = LANGUAGE_CODE_MAP[target.languageCode] || target.languageCode;
       
       const response = await apiClient.get('/api/v1/admin/audio/voices', {
         params: {
           language_code: ttsLanguageCode,
-          is_active: true
+          is_active: true,
+          dedupe_aliases: true,
+          page_size: 100,
         }
       });
       
       const voicesList = response.data.items || [];
       setVoices(voicesList);
-      
-      // Auto-select first voice
-      if (voicesList.length > 0) {
-        setSelectedVoiceId(voicesList[0].id);
-      }
     } catch (error: any) {
       console.error("Error fetching voices:", error);
-      toast.error("Failed to load voices");
+      toast.error(formatErrorMessage(error, "Failed to load voices"));
     } finally {
       setIsLoadingVoices(false);
     }
@@ -80,49 +138,72 @@ export function RegenerateAudioModal({ isOpen, onClose, word, onSuccess }: Regen
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!word || !selectedVoiceId) {
+    if (!target || !selectedVoiceId) {
       toast.error("Please select a voice");
       return;
     }
 
     setIsLoading(true);
     try {
-      await apiClient.post(`/api/v1/admin/content/words/single/${word.id}/regenerate-audio`, {
+      await apiClient.post(target.submitEndpoint, {
         voice_id: selectedVoiceId,
-        text_override: textOverride !== word.lemma ? textOverride : null
+        text_override: textOverride !== target.defaultText ? textOverride : null
       });
       
       toast.success("Audio regeneration queued successfully");
       onSuccess?.();
       onClose();
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Failed to regenerate audio");
+      toast.error(formatErrorMessage(error, "Failed to regenerate audio"));
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (!word) return null;
+  if (!target) return null;
+
+  const selectedVoice = filteredVoices.find((voice) => voice.id === selectedVoiceId)
+    || voices.find((voice) => voice.id === selectedVoiceId);
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Regenerate Audio: ${word.lemma}`}
+      title={`Regenerate Audio: ${target.displayText}`}
       maxWidth="md"
     >
       <form onSubmit={handleSubmit} className="space-y-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Provider
+          </label>
+          <select
+            value={selectedProvider}
+            onChange={(e) => setSelectedProvider(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-brand-400"
+          >
+            {providerOptions.map((provider) => (
+              <option key={provider} value={provider}>
+                {provider === "all" ? "All Providers" : provider}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+            Filter voices by TTS provider. Generated audio will prefer WAV when the provider supports it, otherwise it will fall back automatically.
+          </p>
+        </div>
+
         {/* Voice Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Select Voice Provider *
+            Select Voice *
           </label>
           
           {isLoadingVoices ? (
             <div className="text-sm text-gray-500">Loading voices...</div>
-          ) : voices.length === 0 ? (
+          ) : filteredVoices.length === 0 ? (
             <div className="text-sm text-red-600">
-              No active voices found for {word.language_code}
+              No compatible voices available for {target.languageCode}{selectedProvider !== "all" ? ` using ${selectedProvider}` : ""}
             </div>
           ) : (
             <select
@@ -131,9 +212,9 @@ export function RegenerateAudioModal({ isOpen, onClose, word, onSuccess }: Regen
               required
               className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-brand-400"
             >
-              {voices.map((voice) => (
+              {filteredVoices.map((voice) => (
                 <option key={voice.id} value={voice.id}>
-                  {voice.name} ({voice.provider})
+                  {getVoiceLabel(voice)} ({voice.provider})
                 </option>
               ))}
             </select>
@@ -153,11 +234,11 @@ export function RegenerateAudioModal({ isOpen, onClose, word, onSuccess }: Regen
             type="text"
             value={textOverride}
             onChange={(e) => setTextOverride(e.target.value)}
-            placeholder={word.lemma}
+            placeholder={target.defaultText}
             className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm transition-colors focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-brand-400"
           />
           <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-            Override the text sent to TTS (with tonal marks). Leave as default to use the word lemma.
+            Override the text sent to TTS. Leave as default to use the saved content text for this item.
           </p>
         </div>
 
@@ -168,11 +249,11 @@ export function RegenerateAudioModal({ isOpen, onClose, word, onSuccess }: Regen
               <FiVolume2 className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
               <div className="text-sm text-blue-800 dark:text-blue-300">
                 <p className="font-medium">
-                  {voices.find(v => v.id === selectedVoiceId)?.name}
+                  {selectedVoice ? getVoiceLabel(selectedVoice) : "Selected voice"}
                 </p>
                 <p className="text-xs mt-1 text-blue-700 dark:text-blue-400">
-                  Provider: {voices.find(v => v.id === selectedVoiceId)?.provider} • 
-                  Language: {word.language_code}
+                  Provider: {selectedVoice?.provider} • 
+                  Language: {target.languageCode} • Preferred output: WAV when supported
                 </p>
               </div>
             </div>
@@ -191,7 +272,7 @@ export function RegenerateAudioModal({ isOpen, onClose, word, onSuccess }: Regen
           </button>
           <button
             type="submit"
-            disabled={isLoading || !selectedVoiceId || voices.length === 0}
+            disabled={isLoading || !selectedVoiceId || filteredVoices.length === 0}
             className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:focus:ring-offset-gray-900"
           >
             <FiVolume2 className="h-4 w-4" />

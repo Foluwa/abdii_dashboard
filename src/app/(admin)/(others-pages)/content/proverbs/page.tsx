@@ -4,12 +4,15 @@ import React, { useState } from "react";
 import { useProverbs, useLanguages } from "@/hooks/useApi";
 import { apiClient } from "@/lib/api";
 import type { Proverb } from "@/types/api";
+import { FiVolume2 } from "react-icons/fi";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Toast from "@/components/ui/toast/Toast";
 import Alert from "@/components/ui/alert/Alert";
 import { StyledSelect } from "@/components/ui/form/StyledSelect";
 import { ConfirmationModal } from "@/components/ui/modal/ConfirmationModal";
 import ProverbsDataTable from "@/components/tables/ProverbsDataTable";
+import { RegenerateAudioModal } from "@/components/modals/RegenerateAudioModal";
+import { scheduleQueuedAudioRefresh } from "@/lib/audioRegeneration";
 
 export default function ProverbsPage() {
   const [selectedLanguage, setSelectedLanguage] = useState<number | undefined>(undefined);
@@ -20,10 +23,44 @@ export default function ProverbsPage() {
   const [editingProverb, setEditingProverb] = useState<Proverb | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const [deleteConfirm, setDeleteConfirm] = useState<{ id: number; proverb: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; proverb: string } | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioPreview, setAudioPreview] = useState<string | null>(null);
   const [uploadingAudio, setUploadingAudio] = useState(false);
+  const [showRegenerateModal, setShowRegenerateModal] = useState(false);
+  const [regeneratingTarget, setRegeneratingTarget] = useState<any | null>(null);
+  const [selectedProverbs, setSelectedProverbs] = useState<string[]>([]);
+  const [showBulkRegenerateConfirm, setShowBulkRegenerateConfirm] = useState(false);
+  const [isBulkRegenerating, setIsBulkRegenerating] = useState(false);
+  const [bulkRegenerateLanguage, setBulkRegenerateLanguage] = useState<string>("yoruba");
+  const [bulkRegenerateVoiceId, setBulkRegenerateVoiceId] = useState<string>("");
+  const [availableVoices, setAvailableVoices] = useState<any[]>([]);
+  const [isLoadingVoices, setIsLoadingVoices] = useState(false);
+
+  // Helper to format error messages (handles both string and object errors)
+  const formatErrorMessage = (error: any, fallbackMessage: string): string => {
+    const detail = error?.response?.data?.detail;
+    
+    // If detail is a string, return it
+    if (typeof detail === 'string') {
+      return detail;
+    }
+    
+    // If detail is an array (Pydantic validation errors)
+    if (Array.isArray(detail) && detail.length > 0) {
+      // Extract first error message
+      const firstError = detail[0];
+      return firstError.msg || firstError.message || JSON.stringify(firstError);
+    }
+    
+    // If detail is an object, try to extract a message
+    if (typeof detail === 'object' && detail !== null) {
+      return detail.msg || detail.message || JSON.stringify(detail);
+    }
+    
+    // Fallback to error message or default
+    return error?.message || fallbackMessage;
+  };
 
   const { proverbs, total, isLoading, isError, refresh } = useProverbs({ 
     language_id: selectedLanguage, 
@@ -36,7 +73,7 @@ export default function ProverbsPage() {
   // Deduplicate proverbs to prevent duplicate key errors
   const uniqueProverbs = React.useMemo(() => {
     if (!proverbs) return [];
-    const seen = new Set<number>();
+    const seen = new Set<string>();
     return proverbs.filter((proverb: Proverb) => {
       if (seen.has(proverb.id)) {
         return false;
@@ -112,7 +149,7 @@ export default function ProverbsPage() {
     setErrorMessage("");
     
     try {
-      let proverbId: number;
+      let proverbId: string;
       if (editingProverb) {
         await apiClient.put(`/api/v1/admin/proverbs/${editingProverb.id}`, formData);
         proverbId = editingProverb.id;
@@ -138,7 +175,7 @@ export default function ProverbsPage() {
           setSuccessMessage(editingProverb ? "Proverb and audio updated successfully" : "Proverb and audio created successfully");
         } catch (audioError: any) {
           console.error('Audio upload error:', audioError);
-          setErrorMessage('Proverb saved but audio upload failed: ' + (audioError.response?.data?.detail || audioError.message));
+          setErrorMessage('Proverb saved but audio upload failed: ' + formatErrorMessage(audioError, audioError.message || 'Unknown error'));
         } finally {
           setUploadingAudio(false);
         }
@@ -148,12 +185,42 @@ export default function ProverbsPage() {
       refresh();
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (error: any) {
-      setErrorMessage(error.response?.data?.detail || "Failed to save proverb");
+      setErrorMessage(formatErrorMessage(error, "Failed to save proverb"));
     }
   };
 
-  const handleDeleteClick = (proverbId: number, proverbText: string) => {
+  const handleDeleteClick = (proverbId: string, proverbText: string) => {
     setDeleteConfirm({ id: proverbId, proverb: proverbText });
+  };
+
+  const handleSelectAllProverbs = () => {
+    if (selectedProverbs.length === uniqueProverbs.length) {
+      setSelectedProverbs([]);
+      return;
+    }
+
+    setSelectedProverbs(uniqueProverbs.map((proverb: Proverb) => proverb.id));
+  };
+
+  const handleSelectProverb = (proverbId: string) => {
+    setSelectedProverbs((prev) =>
+      prev.includes(proverbId)
+        ? prev.filter((id) => id !== proverbId)
+        : [...prev, proverbId]
+    );
+  };
+
+  const handleRegenerateAudio = (proverb: Proverb) => {
+    const languageCode = languages?.find((lang: any) => lang.id === proverb.language_id)?.iso_639_3 || "yor";
+    setRegeneratingTarget({
+      id: proverb.id,
+      contentType: "proverb",
+      displayText: proverb.proverb,
+      defaultText: proverb.proverb,
+      languageCode,
+      submitEndpoint: `/api/v1/admin/content/proverbs/${proverb.id}/regenerate-audio`,
+    });
+    setShowRegenerateModal(true);
   };
 
   const handleDelete = async () => {
@@ -166,9 +233,64 @@ export default function ProverbsPage() {
       refresh();
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (error: any) {
-      setErrorMessage(error.response?.data?.detail || "Failed to delete proverb");
+      setErrorMessage(formatErrorMessage(error, "Failed to delete proverb"));
       setDeleteConfirm(null);
       setTimeout(() => setErrorMessage(""), 5000);
+    }
+  };
+
+  const handleBulkRegenerateAudio = async () => {
+    if (selectedProverbs.length === 0) return;
+    
+    // Fetch available voices when opening modal
+    setIsLoadingVoices(true);
+    try {
+      const response = await apiClient.get("/api/v1/admin/audio/voices", {
+        params: { is_active: true, limit: 100 }
+      });
+      const voices = response.data.voices || response.data.items || [];
+      setAvailableVoices(voices);
+      
+      // Find default Yoruba voice (Spitch provider)
+      const defaultVoice = voices.find((v: any) => 
+        v.language_code === "yo" && v.provider === "spitch" && v.is_active
+      );
+      setBulkRegenerateVoiceId(defaultVoice?.id || "");
+    } catch (error) {
+      console.error("Failed to load voices:", error);
+      setAvailableVoices([]);
+    } finally {
+      setIsLoadingVoices(false);
+    }
+    
+    setShowBulkRegenerateConfirm(true);
+  };
+
+  const confirmBulkRegenerateAudio = async () => {
+    setIsBulkRegenerating(true);
+    try {
+      const payload: any = {
+        proverb_ids: selectedProverbs,
+        language: bulkRegenerateLanguage, // Send selected language
+      };
+      
+      // Only include voice_id if one is selected
+      if (bulkRegenerateVoiceId) {
+        payload.voice_id = bulkRegenerateVoiceId;
+      }
+      
+      await apiClient.post("/api/v1/admin/content/proverbs/bulk/regenerate-audio", payload);
+      setSuccessMessage(`Audio regeneration started for ${selectedProverbs.length} ${bulkRegenerateLanguage} proverb(s)`);
+      setSelectedProverbs([]);
+      setShowBulkRegenerateConfirm(false);
+      refresh();
+      scheduleQueuedAudioRefresh(refresh);
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (error: any) {
+      setErrorMessage(formatErrorMessage(error, "Failed to regenerate proverb audio"));
+      setTimeout(() => setErrorMessage(""), 5000);
+    } finally {
+      setIsBulkRegenerating(false);
     }
   };
 
@@ -182,95 +304,117 @@ export default function ProverbsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <PageBreadCrumb pageTitle="Proverbs" />
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Manage proverbs and cultural sayings
-          </p>
-        </div>
-        <button
-          onClick={openCreateModal}
-          className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700"
-        >
-          + Add Proverb
-        </button>
-      </div>
+    <div className="p-6">
+      <PageBreadCrumb pageTitle="Proverbs" />
 
       {/* Messages */}
       {successMessage && <Toast type="success" message={successMessage} onClose={() => setSuccessMessage("")} />}
       {errorMessage && <Toast type="error" message={errorMessage} onClose={() => setErrorMessage("")} />}
 
-      {/* Filters */}
-      <div className="p-4 bg-white border border-gray-200 rounded-lg dark:bg-gray-900 dark:border-gray-800">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Search
-            </label>
-            <input
-              type="text"
-              placeholder="Search proverbs..."
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-700 dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-            />
-          </div>
-
-          <StyledSelect
-            label="Language"
-            value={selectedLanguage || ""}
-            onChange={(e) => {
-              setSelectedLanguage(e.target.value ? Number(e.target.value) : undefined);
-              setPage(1);
-            }}
-            options={[
-              { value: "", label: "All Languages" },
-              ...(languages?.map((lang: any) => ({
-                value: lang.id,
-                label: lang.name
-              })) || [])
-            ]}
-            placeholder="All Languages"
-          />
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Category
-            </label>
-            <input
-              type="text"
-              value={category}
-              onChange={(e) => {
-                setCategory(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Filter by category..."
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-700 dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-            />
-          </div>
-
-          <StyledSelect
-            label="Per Page"
-            value={limit}
-            onChange={(e) => {
-              setLimit(Number(e.target.value));
-              setPage(1);
-            }}
-            options={[
-              { value: 20, label: "20" },
-              { value: 50, label: "50" },
-              { value: 100, label: "100" }
-            ]}
-          />
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Proverbs Management</h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            Manage proverbs and cultural sayings
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          {selectedProverbs.length > 0 && (
+            <>
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                {selectedProverbs.length} selected
+              </span>
+              <button
+                onClick={handleBulkRegenerateAudio}
+                disabled={isBulkRegenerating}
+                className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-purple-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus:ring-offset-gray-900"
+              >
+                <FiVolume2 className="h-4 w-4" />
+                {isBulkRegenerating ? "Regenerating..." : "Regenerate Audio"}
+              </button>
+            </>
+          )}
+          <button
+            onClick={openCreateModal}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            + Add Proverb
+          </button>
         </div>
       </div>
 
-      {/* Proverbs DataTable */}
+      {/* Filters */}
+      <div className="mb-6 grid gap-4 max-w-full md:grid-cols-2 lg:grid-cols-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Search
+          </label>
+          <input
+            type="text"
+            placeholder="Search proverbs..."
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-700 dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+
+        <StyledSelect
+          label="Language"
+          value={selectedLanguage || ""}
+          onChange={(e) => {
+            setSelectedLanguage(e.target.value ? Number(e.target.value) : undefined);
+            setPage(1);
+          }}
+          options={[
+            { value: "", label: "All Languages" },
+            ...(languages?.map((lang: any) => ({
+              value: lang.id,
+              label: lang.name
+            })) || [])
+          ]}
+          fullWidth
+        />
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Category
+          </label>
+          <input
+            type="text"
+            value={category}
+            onChange={(e) => {
+              setCategory(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Filter by category..."
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-700 dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+
+        <StyledSelect
+          label="Per Page"
+          value={limit}
+          onChange={(e) => {
+            setLimit(Number(e.target.value));
+            setPage(1);
+          }}
+          options={[
+            { value: 20, label: "20" },
+            { value: 50, label: "50" },
+            { value: 100, label: "100" }
+          ]}
+          fullWidth
+        />
+      </div>
+
+      {/* Proverbs Table - Desktop and Mobile */}
       <ProverbsDataTable
         proverbs={uniqueProverbs}
         isLoading={isLoading}
+        selectedProverbs={selectedProverbs}
+        onSelectAll={handleSelectAllProverbs}
+        onSelectProverb={handleSelectProverb}
         onEdit={openEditModal}
+        onRegenerateAudio={handleRegenerateAudio}
         onDelete={(id) => {
           const proverb = uniqueProverbs.find((p: Proverb) => p.id === id);
           handleDeleteClick(id, proverb?.proverb || 'this proverb');
@@ -279,7 +423,7 @@ export default function ProverbsPage() {
 
       {/* Pagination */}
       {total > limit && (
-        <div className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg dark:bg-gray-900 dark:border-gray-800">
+        <div className="flex items-center justify-between px-6 py-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 rounded-b-lg">
           <p className="text-sm text-gray-700 dark:text-gray-300">
             Showing {(page - 1) * limit + 1} to {Math.min(page * limit, total)} of {total} proverbs
           </p>
@@ -287,7 +431,7 @@ export default function ProverbsPage() {
             <button
               onClick={() => setPage(page - 1)}
               disabled={page === 1}
-              className="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700"
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
             >
               Previous
             </button>
@@ -328,16 +472,16 @@ export default function ProverbsPage() {
                 
                 return pageNumbers.map((num, idx) => 
                   num === '...' ? (
-                    <span key={`ellipsis-${idx}`} className="px-3 py-1 text-sm text-gray-500">
+                    <span key={`ellipsis-${idx}`} className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
                       ...
                     </span>
                   ) : (
                     <button
                       key={num}
                       onClick={() => setPage(num as number)}
-                      className={`px-3 py-1 text-sm font-medium rounded-lg transition-colors ${
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                         page === num
-                          ? 'bg-brand-600 text-white'
+                          ? 'bg-blue-600 text-white hover:bg-blue-700'
                           : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700'
                       }`}
                     >
@@ -351,7 +495,7 @@ export default function ProverbsPage() {
             <button
               onClick={() => setPage(page + 1)}
               disabled={page * limit >= total}
-              className="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700"
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
             >
               Next
             </button>
@@ -487,6 +631,107 @@ export default function ProverbsPage() {
         confirmText="Delete"
         cancelText="Cancel"
         variant="danger"
+      />
+
+      {/* Bulk Regenerate Audio Modal */}
+      {showBulkRegenerateConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Regenerate Audio for {selectedProverbs.length} Proverb{selectedProverbs.length !== 1 ? 's' : ''}
+            </h3>
+            
+            <div className="space-y-4 mb-6">
+              {/* Language Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Language
+                </label>
+                <select
+                  value={bulkRegenerateLanguage}
+                  onChange={(e) => {
+                    setBulkRegenerateLanguage(e.target.value);
+                    // Reset voice selection when language changes
+                    setBulkRegenerateVoiceId("");
+                  }}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-700 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                >
+                  <option value="yoruba">Yoruba</option>
+                  <option value="english">English</option>
+                </select>
+              </div>
+
+              {/* Voice Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Voice (Optional)
+                </label>
+                {isLoadingVoices ? (
+                  <div className="text-sm text-gray-500 dark:text-gray-400">Loading voices...</div>
+                ) : (
+                  <select
+                    value={bulkRegenerateVoiceId}
+                    onChange={(e) => setBulkRegenerateVoiceId(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg dark:border-gray-700 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                  >
+                    <option value="">Use default voice for language</option>
+                    {availableVoices
+                      .filter((voice) => {
+                        const langCode = bulkRegenerateLanguage === "yoruba" ? "yo" : "en";
+                        return voice.language_code === langCode || voice.language_code.startsWith(langCode);
+                      })
+                      .map((voice) => (
+                        <option key={voice.id} value={voice.id}>
+                          {voice.display_name || voice.voice_name} ({voice.provider})
+                          {voice.gender ? ` - ${voice.gender}` : ''}
+                        </option>
+                      ))}
+                  </select>
+                )}
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Leave empty to use the default active voice for the selected language
+                </p>
+              </div>
+              
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                This will queue fresh audio generation jobs. Jobs are processed in the background.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={confirmBulkRegenerateAudio}
+                disabled={isBulkRegenerating || isLoadingVoices}
+                className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:focus:ring-offset-gray-900"
+              >
+                {isBulkRegenerating ? "Regenerating..." : "Regenerate"}
+              </button>
+              <button
+                onClick={() => {
+                  setShowBulkRegenerateConfirm(false);
+                  setBulkRegenerateLanguage("yoruba");
+                  setBulkRegenerateVoiceId("");
+                }}
+                disabled={isBulkRegenerating}
+                className="flex-1 px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:focus:ring-offset-gray-900"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <RegenerateAudioModal
+        isOpen={showRegenerateModal}
+        onClose={() => {
+          setShowRegenerateModal(false);
+          setRegeneratingTarget(null);
+        }}
+        target={regeneratingTarget}
+        onSuccess={() => {
+          scheduleQueuedAudioRefresh(refresh);
+        }}
       />
     </div>
   );

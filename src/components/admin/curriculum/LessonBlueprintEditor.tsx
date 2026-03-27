@@ -59,6 +59,13 @@ type PhraseLibraryItem = {
 
 type PhrasePickerTarget =
   | {
+      mode: 'readingTarget';
+      targetIndex: number;
+    }
+  | {
+      mode: 'readingSupportingContext';
+    }
+  | {
       mode: 'recognitionTask';
       stepIndex: number;
     }
@@ -180,6 +187,18 @@ function buildSourceRef(contentType: string, contentId: string, role = 'source')
   };
 }
 
+function getContentRef(value: unknown): Record<string, unknown> | null {
+  return getObject(value);
+}
+
+function getReadingMediaRefFieldPath(value: unknown): string {
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+  const mediaRef = getObject(value);
+  return getString(mediaRef?.fieldPath);
+}
+
 function getMediaBindings(payload: Record<string, unknown>): Record<string, LessonBlueprintMediaBinding> {
   const raw = payload.mediaBindings;
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -198,6 +217,13 @@ function inferAssetKindFromFieldPath(fieldPath: string): 'image' | 'audio' | 'vi
   if (normalized.includes('audio')) return 'audio';
   if (normalized.includes('video')) return 'video';
   return 'image';
+}
+
+function normalizeAssetKind(kind?: string | null, fieldPath?: string): 'image' | 'audio' | 'video' {
+  if (kind === 'audio' || kind === 'video' || kind === 'image') {
+    return kind;
+  }
+  return inferAssetKindFromFieldPath(fieldPath || '');
 }
 
 function getStepRuntimeType(step: Record<string, unknown>): string {
@@ -395,6 +421,30 @@ function normalizeValidationPath(path: string | null | undefined): string {
   return (path || '').trim().replace(/^\$\./, '');
 }
 
+function buildValidationSelector(path: string): string {
+  return `[data-field-path="${path.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`;
+}
+
+function getFieldPathAttributes(path: string): Record<string, string> {
+  return {
+    'data-field-path': normalizeValidationPath(path),
+  };
+}
+
+function getValidationPathCandidates(path: string): string[] {
+  const candidates: string[] = [];
+  let current = normalizeValidationPath(path);
+
+  while (current) {
+    candidates.push(current);
+    const next = current.replace(/(\[[0-9]+\]|\.[^.\[]+)$/, '');
+    if (next === current) break;
+    current = next;
+  }
+
+  return candidates;
+}
+
 function fieldIdForValidationPath(path: string | null | undefined): string | null {
   const normalized = normalizeValidationPath(path);
   if (!normalized) return null;
@@ -440,6 +490,69 @@ function buildManagedBlueprintKey(args: {
   ];
   const key = `lesson_${parts.join('_')}`;
   return key.slice(0, 120).replace(/_+$/g, '') || 'lesson_item';
+}
+
+function buildCompactReadingPayload(sourcePayload: Record<string, unknown>, fallbackLessonKey: string) {
+  const next = { ...sourcePayload };
+  const presentation = { ...(getObject(sourcePayload.presentation) ?? {}) };
+
+  const topLevelPresentationMap: Array<[string, unknown]> = [
+    ['title', getString(sourcePayload.title)],
+    ['subtitle', getString(sourcePayload.subtitle)],
+    ['unitLabel', getString(sourcePayload.unitLabel)],
+    ['levelTag', getString(sourcePayload.levelTag)],
+    ['estimatedMinutes', typeof sourcePayload.estimatedMinutes === 'number' ? sourcePayload.estimatedMinutes : null],
+    [
+      'exerciseOrderVersion',
+      typeof sourcePayload.exerciseOrderVersion === 'number' ? sourcePayload.exerciseOrderVersion : null,
+    ],
+    ['learningObjectives', getStringArray(sourcePayload.learningObjectives)],
+  ];
+
+  for (const [field, value] of topLevelPresentationMap) {
+    if (
+      value === null ||
+      value === undefined ||
+      (typeof value === 'string' && !value.trim()) ||
+      (Array.isArray(value) && value.length === 0)
+    ) {
+      continue;
+    }
+    presentation[field] = value;
+  }
+
+  next.kind = 'reading_practice';
+  next.version = 1;
+  next.lessonKey = getString(next.lessonKey) || getString(next.id) || fallbackLessonKey;
+  next.presentation = presentation;
+  next.targets = getObjectArray(sourcePayload.targets);
+
+  const supportingContext = getObject(sourcePayload.supportingContext);
+  if (supportingContext) {
+    next.supportingContext = supportingContext;
+  } else {
+    delete next.supportingContext;
+  }
+
+  const mediaRefs = getObject(sourcePayload.mediaRefs);
+  if (mediaRefs) {
+    next.mediaRefs = mediaRefs;
+  } else {
+    delete next.mediaRefs;
+  }
+
+  delete next.targetVocabIds;
+  delete next.steps;
+  delete next.dialogueContext;
+  delete next.flowMode;
+  delete next.exerciseOrderVersion;
+  delete next.heroImageUrl;
+  delete next.coverImageUrl;
+  delete next.thumbnailUrl;
+  delete next.imageUrl;
+  delete next.characterImageUrl;
+
+  return next;
 }
 
 export function LessonBlueprintEditor({
@@ -488,9 +601,14 @@ export function LessonBlueprintEditor({
   const [uploadingFieldPath, setUploadingFieldPath] = useState<string | null>(null);
   const [uploadProgressByField, setUploadProgressByField] = useState<Record<string, number>>({});
   const [assetLibraryTargetFieldPath, setAssetLibraryTargetFieldPath] = useState<string | null>(null);
+  const [isAssetLibraryModalOpen, setIsAssetLibraryModalOpen] = useState(false);
   const [isAssetDropActive, setIsAssetDropActive] = useState(false);
   const [globalAssetSearch, setGlobalAssetSearch] = useState('');
   const [assetLibraryScope, setAssetLibraryScope] = useState<'same_course' | 'all_courses'>('same_course');
+  const [assetLibrarySort, setAssetLibrarySort] = useState<'recent' | 'name' | 'source'>('recent');
+  const [assetLibraryKindFilter, setAssetLibraryKindFilter] = useState<'all' | 'image' | 'audio' | 'video'>('all');
+  const [assetLibraryCompatibilityFilter, setAssetLibraryCompatibilityFilter] = useState<'all' | 'compatible'>('all');
+  const [assetLibraryTab, setAssetLibraryTab] = useState<'local' | 'global'>('local');
   const [vocabSearch, setVocabSearch] = useState('');
   const [toneContrastSearch, setToneContrastSearch] = useState('');
   const [phrasePickerTarget, setPhrasePickerTarget] = useState<PhrasePickerTarget | null>(null);
@@ -746,11 +864,24 @@ export function LessonBlueprintEditor({
   }, [mode, payloadText, selectedLessonCapability]);
 
   useEffect(() => {
-    const targetId = fieldIdForValidationPath(focusFieldPath);
-    if (!targetId) return;
+    const normalizedPath = normalizeValidationPath(focusFieldPath);
+    if (!normalizedPath) return;
 
-    const element = document.getElementById(targetId) as HTMLElement | null;
+    const targetId = fieldIdForValidationPath(normalizedPath);
+    const element =
+      getValidationPathCandidates(normalizedPath)
+        .map((candidate) => document.querySelector(buildValidationSelector(candidate)) as HTMLElement | null)
+        .find(Boolean) ||
+      (targetId ? (document.getElementById(targetId) as HTMLElement | null) : null);
     if (!element) return;
+
+    let parent = element.parentElement;
+    while (parent) {
+      if (parent.tagName === 'DETAILS') {
+        (parent as HTMLDetailsElement).open = true;
+      }
+      parent = parent.parentElement;
+    }
 
     element.scrollIntoView({ behavior: 'smooth', block: 'center' });
     if (typeof element.focus === 'function') {
@@ -763,7 +894,7 @@ export function LessonBlueprintEditor({
     }, 1800);
 
     return () => window.clearTimeout(timeout);
-  }, [focusFieldPath, form.lesson_kind]);
+  }, [focusFieldPath, form.lesson_kind, payloadText]);
 
   const parsePayload = (): Record<string, unknown> | null => {
     try {
@@ -789,8 +920,10 @@ export function LessonBlueprintEditor({
   const mediaBindings = useMemo(() => getMediaBindings(editablePayload), [editablePayload]);
   const mediaFieldOptions = useMemo(() => {
     const topLevel = [
+      { value: 'thumbnailUrl', label: 'Thumbnail image' },
       { value: 'heroImageUrl', label: 'Hero image' },
       { value: 'coverImageUrl', label: 'Cover image' },
+      { value: 'characterImageUrl', label: 'Character image' },
       { value: 'imageUrl', label: 'Image' },
       { value: 'audioUrl', label: 'Audio' },
     ];
@@ -831,6 +964,68 @@ export function LessonBlueprintEditor({
       isMediaBindingCompatible(binding, assetLibraryTargetFieldPath)
     );
   }, [assetLibraryTargetFieldPath, mediaBindings]);
+  const selectedAssetLibraryField = useMemo(() => {
+    return mediaFieldOptions.find((option) => option.value === assetLibraryTargetFieldPath) ?? null;
+  }, [assetLibraryTargetFieldPath, mediaFieldOptions]);
+  const assetMatchesFilters = useMemo(
+    () =>
+      (assetKind: string | null | undefined, fieldPath: string, isCompatible: boolean) => {
+        const resolvedKind = normalizeAssetKind(assetKind, fieldPath);
+        if (assetLibraryKindFilter !== 'all' && resolvedKind !== assetLibraryKindFilter) {
+          return false;
+        }
+        if (assetLibraryCompatibilityFilter === 'compatible' && !isCompatible) {
+          return false;
+        }
+        return true;
+      },
+    [assetLibraryCompatibilityFilter, assetLibraryKindFilter]
+  );
+  const filteredBlueprintLibraryAssets = useMemo(() => {
+    const query = globalAssetSearch.trim().toLowerCase();
+    const items = Object.entries(mediaBindings).filter(([fieldPath, binding]) => {
+      const isCompatible = assetLibraryTargetFieldPath
+        ? isMediaBindingCompatible(binding, assetLibraryTargetFieldPath)
+        : false;
+      if (!assetMatchesFilters(binding.asset_kind, fieldPath, isCompatible)) {
+        return false;
+      }
+      if (!query) return true;
+      const haystack = [fieldPath, binding.file_name, binding.asset_kind, binding.storage_key]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+
+    return items.sort(([leftFieldPath, leftBinding], [rightFieldPath, rightBinding]) => {
+      if (assetLibrarySort === 'name') {
+        return (leftBinding.file_name || leftFieldPath).localeCompare(rightBinding.file_name || rightFieldPath);
+      }
+      if (assetLibrarySort === 'source') {
+        return leftFieldPath.localeCompare(rightFieldPath);
+      }
+      return (rightBinding.uploaded_at || '').localeCompare(leftBinding.uploaded_at || '');
+    });
+  }, [assetLibrarySort, assetLibraryTargetFieldPath, assetMatchesFilters, globalAssetSearch, mediaBindings]);
+  const sortedGlobalAssetLibraryItems = useMemo(() => {
+    return [...globalAssetLibraryItems]
+      .filter((item) => {
+        const isCompatible = assetLibraryTargetFieldPath
+          ? isMediaBindingCompatible(item.binding, assetLibraryTargetFieldPath)
+          : false;
+        return assetMatchesFilters(item.binding.asset_kind, item.field_path, isCompatible);
+      })
+      .sort((left, right) => {
+      if (assetLibrarySort === 'name') {
+        return (left.binding.file_name || left.field_path).localeCompare(right.binding.file_name || right.field_path);
+      }
+      if (assetLibrarySort === 'source') {
+        return `${left.blueprint_key}:${left.field_path}`.localeCompare(`${right.blueprint_key}:${right.field_path}`);
+      }
+      return (right.binding.uploaded_at || '').localeCompare(left.binding.uploaded_at || '');
+      });
+  }, [assetLibrarySort, assetLibraryTargetFieldPath, assetMatchesFilters, globalAssetLibraryItems]);
   const filteredToneContrasts = useMemo(() => {
     const query = toneContrastSearch.trim().toLowerCase();
     const items = Array.isArray(toneContrastItems) ? toneContrastItems : [];
@@ -846,6 +1041,37 @@ export function LessonBlueprintEditor({
       .slice(0, 10);
   }, [toneContrastItems, toneContrastSearch]);
   const starterSteps = useMemo(() => getStarterSteps(form.lesson_kind), [form.lesson_kind]);
+  const hasCompactReadingPayload = useMemo(() => {
+    if (form.lesson_kind !== 'reading_practice') return false;
+    return (
+      getString(editablePayload.kind) === 'reading_practice' ||
+      Array.isArray(editablePayload.targets) ||
+      Boolean(getObject(editablePayload.presentation)) ||
+      Boolean(getObject(editablePayload.supportingContext)) ||
+      Boolean(getObject(editablePayload.mediaRefs))
+    );
+  }, [editablePayload, form.lesson_kind]);
+  const hasLegacyReadingPayload = useMemo(() => {
+    if (form.lesson_kind !== 'reading_practice') return false;
+    return (
+      getStringArray(editablePayload.targetVocabIds).length > 0 ||
+      getObjectArray(editablePayload.steps).length > 0 ||
+      Boolean(getObject(editablePayload.dialogueContext)) ||
+      Boolean(getString(editablePayload.flowMode)) ||
+      Boolean(getString(editablePayload.heroImageUrl)) ||
+      Boolean(getString(editablePayload.coverImageUrl)) ||
+      Boolean(getString(editablePayload.thumbnailUrl)) ||
+      Boolean(getString(editablePayload.imageUrl)) ||
+      Boolean(getString(editablePayload.characterImageUrl))
+    );
+  }, [editablePayload, form.lesson_kind]);
+  const readingPresentation = useMemo(() => getObject(editablePayload.presentation) ?? {}, [editablePayload]);
+  const readingTargets = useMemo(() => getObjectArray(editablePayload.targets), [editablePayload]);
+  const readingSupportingContext = useMemo(
+    () => getObject(editablePayload.supportingContext) ?? {},
+    [editablePayload]
+  );
+  const readingMediaRefs = useMemo(() => getObject(editablePayload.mediaRefs) ?? {}, [editablePayload]);
   const stepTypeOptions = useMemo(() => getStepTypeOptions(form.lesson_kind), [form.lesson_kind]);
   const canUploadAssets = mode === 'edit' && Boolean(blueprint?.id);
 
@@ -877,6 +1103,25 @@ export function LessonBlueprintEditor({
     }));
     setErrorMessage('');
   }, [editablePayload, form.blueprint_key, mode]);
+
+  useEffect(() => {
+    if (form.lesson_kind !== 'reading_practice') return;
+    if (rawPayloadInvalid) return;
+    if (hasCompactReadingPayload && !hasLegacyReadingPayload) return;
+
+    const fallbackLessonKey =
+      form.blueprint_key.trim() || managedBlueprintKey || getString(editablePayload.id) || 'lesson_reading_practice_01';
+    const normalizedPayload = buildCompactReadingPayload(editablePayload, fallbackLessonKey);
+    replacePayload(normalizedPayload);
+  }, [
+    editablePayload,
+    form.blueprint_key,
+    form.lesson_kind,
+    hasCompactReadingPayload,
+    hasLegacyReadingPayload,
+    managedBlueprintKey,
+    rawPayloadInvalid,
+  ]);
 
   const replacePayload = (nextPayload: Record<string, unknown>) => {
     setLastValidPayload(nextPayload);
@@ -923,16 +1168,132 @@ export function LessonBlueprintEditor({
   };
 
   const addVocabBinding = (externalId: string) => {
-    const next = uniqueTokens([
-      ...getStringArray(editablePayload.targetVocabIds),
-      externalId,
-    ]);
+    const next = uniqueTokens([...getStringArray(editablePayload.targetVocabIds), externalId]);
     updateTopLevelField('targetVocabIds', next);
   };
 
   const removeVocabBinding = (externalId: string) => {
     const next = getStringArray(editablePayload.targetVocabIds).filter((item) => item !== externalId);
     updateTopLevelField('targetVocabIds', next);
+  };
+
+  const updateCompactReadingPayload = (
+    updater: (payload: Record<string, unknown>) => Record<string, unknown>
+  ) => {
+    updatePayload((prev) => {
+      const fallbackLessonKey =
+        form.blueprint_key || managedBlueprintKey || getString(prev.id) || 'lesson_reading_practice_01';
+      return updater(buildCompactReadingPayload(prev, fallbackLessonKey));
+    });
+  };
+
+  const updateReadingPresentationField = (field: string, value: unknown) => {
+    updateCompactReadingPayload((prev) => {
+      const next = { ...prev };
+      const presentation = { ...(getObject(prev.presentation) ?? {}) };
+      if (
+        value === null ||
+        value === undefined ||
+        (typeof value === 'string' && value.trim() === '') ||
+        (Array.isArray(value) && value.length === 0)
+      ) {
+        delete presentation[field];
+      } else {
+        presentation[field] = value;
+      }
+      if (Object.keys(presentation).length > 0) {
+        next.presentation = presentation;
+      } else {
+        delete next.presentation;
+      }
+      return next;
+    });
+  };
+
+  const updateReadingTarget = (targetIndex: number, phrase: PhraseLibraryItem) => {
+    updateCompactReadingPayload((prev) => {
+      const next = { ...prev };
+      const targets = [...getObjectArray(prev.targets)];
+      targets[targetIndex] = {
+        contentRef: buildSourceRef('phrase', phrase.id, 'target'),
+      };
+      next.targets = targets;
+      return next;
+    });
+  };
+
+  const removeReadingTarget = (targetIndex: number) => {
+    updateCompactReadingPayload((prev) => {
+      const next = { ...prev };
+      const targets = [...getObjectArray(prev.targets)];
+      if (targetIndex < targets.length) {
+        targets.splice(targetIndex, 1);
+      }
+      if (targets.length > 0) {
+        next.targets = targets;
+      } else {
+        next.targets = [];
+      }
+      return next;
+    });
+  };
+
+  const updateReadingSupportingContextField = (field: string, value: unknown) => {
+    updateCompactReadingPayload((prev) => {
+      const next = { ...prev };
+      const supportingContext = { ...(getObject(prev.supportingContext) ?? {}) };
+      if (
+        value === null ||
+        value === undefined ||
+        (typeof value === 'string' && value.trim() === '')
+      ) {
+        delete supportingContext[field];
+      } else {
+        supportingContext[field] = value;
+      }
+      if (Object.keys(supportingContext).length > 0) {
+        next.supportingContext = supportingContext;
+      } else {
+        delete next.supportingContext;
+      }
+      return next;
+    });
+  };
+
+  const updateReadingSupportingContextRef = (contentType: string, contentId: string) => {
+    updateCompactReadingPayload((prev) => {
+      const next = { ...prev };
+      const supportingContext = { ...(getObject(prev.supportingContext) ?? {}) };
+      supportingContext.contextRef = buildSourceRef(contentType, contentId, 'context');
+      next.supportingContext = supportingContext;
+      return next;
+    });
+  };
+
+  const clearReadingSupportingContext = () => {
+    updateCompactReadingPayload((prev) => {
+      const next = { ...prev };
+      delete next.supportingContext;
+      return next;
+    });
+  };
+
+  const updateReadingMediaRef = (mediaKey: string, fieldPath: string) => {
+    updateCompactReadingPayload((prev) => {
+      const next = { ...prev };
+      const mediaRefs = { ...(getObject(prev.mediaRefs) ?? {}) };
+      if (fieldPath.trim()) {
+        mediaRefs[mediaKey] = { fieldPath: fieldPath.trim() };
+      } else {
+        delete mediaRefs[mediaKey];
+      }
+      if (Object.keys(mediaRefs).length > 0) {
+        next.mediaRefs = mediaRefs;
+      } else {
+        delete next.mediaRefs;
+      }
+      return next;
+    });
   };
 
   const updateStepField = (index: number, field: string, value: unknown) => {
@@ -1037,6 +1398,20 @@ export function LessonBlueprintEditor({
 
   const applyPhraseSelection = (phrase: PhraseLibraryItem) => {
     if (!phrasePickerTarget) return;
+
+    if (phrasePickerTarget.mode === 'readingTarget') {
+      updateReadingTarget(phrasePickerTarget.targetIndex, phrase);
+      setPhrasePickerTarget(null);
+      setPhraseSearch('');
+      return;
+    }
+
+    if (phrasePickerTarget.mode === 'readingSupportingContext') {
+      updateReadingSupportingContextRef('phrase', phrase.id);
+      setPhrasePickerTarget(null);
+      setPhraseSearch('');
+      return;
+    }
 
     updatePayload((prev) => {
       const steps = getObjectArray(prev.steps);
@@ -1336,6 +1711,17 @@ export function LessonBlueprintEditor({
     }
   };
 
+  const openAssetLibrary = (fieldPath: string) => {
+    setAssetLibraryTargetFieldPath(fieldPath);
+    setAssetLibraryTab('local');
+    setIsAssetLibraryModalOpen(true);
+  };
+
+  const closeAssetLibrary = () => {
+    setIsAssetLibraryModalOpen(false);
+    setIsAssetDropActive(false);
+  };
+
   const reuseAssetFromLibrary = (sourceFieldPath: string, targetFieldPath: string) => {
     const binding = mediaBindings[sourceFieldPath];
     if (!binding) {
@@ -1355,6 +1741,7 @@ export function LessonBlueprintEditor({
       };
       return next;
     });
+    setIsAssetLibraryModalOpen(false);
     toast.success(`Reused ${binding.file_name || binding.asset_kind || 'asset'} for ${targetFieldPath}.`);
   };
 
@@ -1372,6 +1759,7 @@ export function LessonBlueprintEditor({
       };
       return next;
     });
+    setIsAssetLibraryModalOpen(false);
     toast.success(`Reused ${item.binding.file_name || item.blueprint_key} from ${item.blueprint_key}.`);
   };
 
@@ -1549,191 +1937,256 @@ export function LessonBlueprintEditor({
                 <div className="mb-4">
                   <h3 className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">Reading Authoring</h3>
                   <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
-                    This lesson family is contract-driven. Reading currently requires exactly two vocabulary bindings and supports an optional dialogue context block.
+                    Compact reading authoring is phrase-first. Pick two target phrases, optional supporting context, and managed media refs while the backend generates the learner runtime.
                   </p>
                 </div>
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Vocabulary A</label>
-                    <input
-                      value={getStringArray(editablePayload.targetVocabIds)[0] ?? ''}
-                      readOnly
-                      className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Vocabulary B</label>
-                    <input
-                      value={getStringArray(editablePayload.targetVocabIds)[1] ?? ''}
-                      readOnly
-                      className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
-                    />
-                  </div>
-                  <div className="lg:col-span-2 rounded-lg border border-emerald-300 bg-white p-3 dark:border-emerald-900 dark:bg-gray-900">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Vocabulary picker</div>
-                      <input
-                        value={vocabSearch}
-                        onChange={(event) => setVocabSearch(event.target.value)}
-                        placeholder="Search vocab external IDs"
-                        className="w-full max-w-xs rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                      />
+
+                <div className="space-y-4">
+                    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-300">
+                      Compact mode. Mobile runtime still uses targetVocabIds until phrase-target runtime is wired end-to-end.
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {getStringArray(editablePayload.targetVocabIds).map((externalId) => (
-                        <button
-                          key={externalId}
-                          type="button"
-                          onClick={() => removeVocabBinding(externalId)}
-                          className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300"
-                          title={externalId}
-                        >
-                          {selectedVocabLabels[externalId] || getVocabDisplayLabel(externalId)} ×
-                        </button>
-                      ))}
-                    </div>
-                    <div className="mt-3 space-y-2">
-                      {isVocabLibraryLoading ? (
-                        <div className="text-xs text-gray-500 dark:text-gray-400">Loading vocab…</div>
-                      ) : vocabLibraryItems.length === 0 ? (
-                        <div className="text-xs text-gray-500 dark:text-gray-400">No vocab matches the current search.</div>
-                      ) : (
-                        vocabLibraryItems.map((item) => (
-                          <button
-                            key={item.external_id}
-                            type="button"
-                            onClick={() => {
-                              const current = getStringArray(editablePayload.targetVocabIds);
-                              if (current.includes(item.external_id)) return;
-                              updateTopLevelField('targetVocabIds', [...current, item.external_id].slice(0, 2));
-                            }}
-                            disabled={getStringArray(editablePayload.targetVocabIds).includes(item.external_id)}
-                            className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-left text-xs hover:bg-gray-50 disabled:opacity-50 dark:border-gray-800 dark:hover:bg-gray-800"
-                          >
-                            <span className="font-medium text-gray-900 dark:text-white">
-                              {getVocabDisplayLabel(item.external_id, item.lemma)}
-                            </span>
-                            <span className="text-gray-500 dark:text-gray-400">{item.external_id}</span>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Subtitle</label>
-                    <input
-                      id="payload-subtitle"
-                      value={getString(editablePayload.subtitle)}
-                      onChange={(event) => updateTopLevelField('subtitle', event.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Unit label</label>
-                    <input
-                      id="payload-unit-label"
-                      value={getString(editablePayload.unitLabel)}
-                      onChange={(event) => updateTopLevelField('unitLabel', event.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Estimated minutes</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={editablePayload.estimatedMinutes ?? ''}
-                      onChange={(event) => updateTopLevelField('estimatedMinutes', Number(event.target.value || 0) || null)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Exercise order version</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={editablePayload.exerciseOrderVersion ?? ''}
-                      onChange={(event) => updateTopLevelField('exerciseOrderVersion', Number(event.target.value || 1))}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                    />
-                  </div>
-                  <div className="lg:col-span-2">
-                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Learning objectives</label>
-                    <textarea
-                      id="payload-learning-objectives"
-                      rows={3}
-                      value={toTextList(getStringArray(editablePayload.learningObjectives))}
-                      onChange={(event) => updateTopLevelField('learningObjectives', parseTokenList(event.target.value))}
-                      placeholder="One objective per line"
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Thumbnail URL</label>
-                    <input
-                      id="payload-thumbnail-url"
-                      value={getString(editablePayload.thumbnailUrl)}
-                      onChange={(event) => updateTopLevelField('thumbnailUrl', event.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Character image URL</label>
-                    <input
-                      value={getString(editablePayload.characterImageUrl)}
-                      onChange={(event) => updateTopLevelField('characterImageUrl', event.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                    />
-                  </div>
-                  <div className="lg:col-span-2 rounded-lg border border-emerald-300 bg-white p-3 dark:border-emerald-900 dark:bg-gray-900">
-                    <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Dialogue context</div>
-                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                       <div>
-                        <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Prompt</label>
+                        <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Title</label>
                         <input
-                          value={getString(getObject(editablePayload.dialogueContext)?.promptText)}
+                          {...getFieldPathAttributes('presentation.title')}
+                          value={getString(readingPresentation.title)}
+                          onChange={(event) => updateReadingPresentationField('title', event.target.value)}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Subtitle</label>
+                        <input
+                          {...getFieldPathAttributes('presentation.subtitle')}
+                          value={getString(readingPresentation.subtitle)}
+                          onChange={(event) => updateReadingPresentationField('subtitle', event.target.value)}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Unit label</label>
+                        <input
+                          {...getFieldPathAttributes('presentation.unitLabel')}
+                          value={getString(readingPresentation.unitLabel)}
+                          onChange={(event) => updateReadingPresentationField('unitLabel', event.target.value)}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Estimated minutes</label>
+                        <input
+                          {...getFieldPathAttributes('presentation.estimatedMinutes')}
+                          type="number"
+                          min={1}
+                          value={readingPresentation.estimatedMinutes ?? ''}
                           onChange={(event) =>
-                            updateTopLevelField('dialogueContext', {
-                              runtimeType: 'dialogueContext',
-                              ...(getObject(editablePayload.dialogueContext) ?? {}),
-                              promptText: event.target.value,
-                            })
+                            updateReadingPresentationField('estimatedMinutes', Number(event.target.value || 0) || null)
                           }
                           className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
                       <div>
-                        <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Translation hint</label>
+                        <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Exercise order version</label>
                         <input
-                          value={getString(getObject(editablePayload.dialogueContext)?.translationHint)}
+                          {...getFieldPathAttributes('presentation.exerciseOrderVersion')}
+                          type="number"
+                          min={1}
+                          value={readingPresentation.exerciseOrderVersion ?? ''}
                           onChange={(event) =>
-                            updateTopLevelField('dialogueContext', {
-                              runtimeType: 'dialogueContext',
-                              ...(getObject(editablePayload.dialogueContext) ?? {}),
-                              translationHint: event.target.value,
-                            })
+                            updateReadingPresentationField('exerciseOrderVersion', Number(event.target.value || 1))
                           }
+                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Level tag</label>
+                        <input
+                          {...getFieldPathAttributes('presentation.levelTag')}
+                          value={getString(readingPresentation.levelTag)}
+                          onChange={(event) => updateReadingPresentationField('levelTag', event.target.value)}
                           className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
                       <div className="lg:col-span-2">
-                        <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Dialogue body</label>
+                        <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Learning objectives</label>
                         <textarea
+                          {...getFieldPathAttributes('presentation.learningObjectives')}
                           rows={3}
-                          value={getString(getObject(editablePayload.dialogueContext)?.body)}
+                          value={toTextList(getStringArray(readingPresentation.learningObjectives))}
                           onChange={(event) =>
-                            updateTopLevelField('dialogueContext', {
-                              runtimeType: 'dialogueContext',
-                              ...(getObject(editablePayload.dialogueContext) ?? {}),
-                              body: event.target.value,
-                            })
+                            updateReadingPresentationField('learningObjectives', parseTokenList(event.target.value))
                           }
+                          placeholder="One objective per line"
                           className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>
                     </div>
+
+                    <div className="rounded-lg border border-emerald-300 bg-white p-3 dark:border-emerald-900 dark:bg-gray-900">
+                      <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Target phrases</div>
+                      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                        {[0, 1].map((targetIndex) => {
+                          const target = readingTargets[targetIndex];
+                          const contentRef = getContentRef(target?.contentRef);
+                          const phraseId = getString(contentRef?.contentId);
+                          return (
+                            <div key={targetIndex} className="rounded-lg border border-gray-200 p-3 dark:border-gray-800">
+                              <div className="text-xs font-medium text-gray-500 dark:text-gray-400">Target {targetIndex + 1}</div>
+                              <div className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
+                                {phraseId || 'No phrase selected'}
+                              </div>
+                              {phraseId ? (
+                                <div className="mt-1 text-xs font-mono text-gray-500 dark:text-gray-400">{phraseId}</div>
+                              ) : null}
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => openPhrasePicker({ mode: 'readingTarget', targetIndex })}
+                                  disabled={!selectedCourse?.target_language_id}
+                                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-900 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                                >
+                                  {phraseId ? 'Replace phrase' : 'Choose phrase'}
+                                </button>
+                                {phraseId ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeReadingTarget(targetIndex)}
+                                    className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/20 dark:text-rose-300"
+                                  >
+                                    Clear
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-emerald-300 bg-white p-3 dark:border-emerald-900 dark:bg-gray-900">
+                      <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Supporting context</div>
+                      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Context type</label>
+                          <select
+                            {...getFieldPathAttributes('supportingContext.contextRef.contentType')}
+                            value={getString(getContentRef(readingSupportingContext.contextRef)?.contentType) || 'phrase'}
+                            onChange={(event) =>
+                              updateReadingSupportingContextRef(
+                                event.target.value,
+                                getString(getContentRef(readingSupportingContext.contextRef)?.contentId)
+                              )
+                            }
+                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                          >
+                            <option value="phrase">Phrase</option>
+                            <option value="phrase_set">Phrase set (transitional)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Context id</label>
+                          <input
+                            {...getFieldPathAttributes('supportingContext.contextRef.contentId')}
+                            value={getString(getContentRef(readingSupportingContext.contextRef)?.contentId)}
+                            onChange={(event) =>
+                              updateReadingSupportingContextRef(
+                                getString(getContentRef(readingSupportingContext.contextRef)?.contentType) || 'phrase',
+                                event.target.value
+                              )
+                            }
+                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Prompt text</label>
+                          <input
+                            {...getFieldPathAttributes('supportingContext.promptText')}
+                            value={getString(readingSupportingContext.promptText)}
+                            onChange={(event) => updateReadingSupportingContextField('promptText', event.target.value)}
+                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Translation hint</label>
+                          <input
+                            {...getFieldPathAttributes('supportingContext.translationHint')}
+                            value={getString(readingSupportingContext.translationHint)}
+                            onChange={(event) => updateReadingSupportingContextField('translationHint', event.target.value)}
+                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                          />
+                        </div>
+                        <div className="lg:col-span-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openPhrasePicker({ mode: 'readingSupportingContext' })}
+                            disabled={
+                              !selectedCourse?.target_language_id ||
+                              (getString(getContentRef(readingSupportingContext.contextRef)?.contentType) || 'phrase') !== 'phrase'
+                            }
+                            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-900 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                          >
+                            Choose phrase context
+                          </button>
+                          {getString(getContentRef(readingSupportingContext.contextRef)?.contentId) ? (
+                            <button
+                              type="button"
+                              onClick={clearReadingSupportingContext}
+                              className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/20 dark:text-rose-300"
+                            >
+                              Clear context
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-emerald-300 bg-white p-3 dark:border-emerald-900 dark:bg-gray-900">
+                      <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Managed media refs</div>
+                      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                        {[
+                          { key: 'thumbnail', label: 'Thumbnail', suggestedFieldPath: 'thumbnailUrl' },
+                          { key: 'hero', label: 'Hero image', suggestedFieldPath: 'heroImageUrl' },
+                          { key: 'cover', label: 'Cover image', suggestedFieldPath: 'coverImageUrl' },
+                          { key: 'character', label: 'Character image', suggestedFieldPath: 'characterImageUrl' },
+                        ].map((item) => {
+                          const currentFieldPath = getReadingMediaRefFieldPath(readingMediaRefs[item.key]);
+                          return (
+                            <div key={item.key} className="rounded-lg border border-gray-200 p-3 dark:border-gray-800">
+                              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">{item.label}</label>
+                              <select
+                                {...getFieldPathAttributes(`mediaRefs.${item.key}.fieldPath`)}
+                                value={currentFieldPath}
+                                onChange={(event) => updateReadingMediaRef(item.key, event.target.value)}
+                                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                              >
+                                <option value="">No managed asset</option>
+                                <option value={item.suggestedFieldPath}>{item.suggestedFieldPath}</option>
+                              </select>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => openAssetLibrary(currentFieldPath || item.suggestedFieldPath)}
+                                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-900 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                                >
+                                  Open asset bindings
+                                </button>
+                                {currentFieldPath ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => updateReadingMediaRef(item.key, '')}
+                                    className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/20 dark:text-rose-300"
+                                  >
+                                    Clear ref
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
-                </div>
               </div>
             )}
 
@@ -1843,6 +2296,7 @@ export function LessonBlueprintEditor({
                     <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Thumbnail URL</label>
                     <input
                       id="payload-thumbnail-url"
+                      {...getFieldPathAttributes('thumbnailUrl')}
                       value={getString(editablePayload.thumbnailUrl)}
                       onChange={(event) => updateTopLevelField('thumbnailUrl', event.target.value)}
                       className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
@@ -1851,6 +2305,7 @@ export function LessonBlueprintEditor({
                   <div>
                     <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Character image URL</label>
                     <input
+                      {...getFieldPathAttributes('characterImageUrl')}
                       value={getString(editablePayload.characterImageUrl)}
                       onChange={(event) => updateTopLevelField('characterImageUrl', event.target.value)}
                       className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
@@ -1873,6 +2328,7 @@ export function LessonBlueprintEditor({
                     <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Range start</label>
                     <input
                       id="payload-range-start"
+                      {...getFieldPathAttributes('range[0]')}
                       type="number"
                       value={getNumberArray(editablePayload.range)[0] ?? 1}
                       onChange={(event) => {
@@ -1885,6 +2341,7 @@ export function LessonBlueprintEditor({
                   <div>
                     <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Range end</label>
                     <input
+                      {...getFieldPathAttributes('range[1]')}
                       type="number"
                       value={getNumberArray(editablePayload.range)[1] ?? 10}
                       onChange={(event) => {
@@ -1898,6 +2355,7 @@ export function LessonBlueprintEditor({
                     <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Unit label</label>
                     <input
                       id="payload-unit-label"
+                      {...getFieldPathAttributes('unitLabel')}
                       value={getString(editablePayload.unitLabel)}
                       onChange={(event) => updateTopLevelField('unitLabel', event.target.value)}
                       className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
@@ -1930,6 +2388,7 @@ export function LessonBlueprintEditor({
                     <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Contrast id</label>
                     <input
                       id="payload-contrast-id"
+                      {...getFieldPathAttributes('contrast_id')}
                       value={getString(editablePayload.contrast_id)}
                       readOnly
                       className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
@@ -1974,6 +2433,7 @@ export function LessonBlueprintEditor({
                     <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Unit label</label>
                     <input
                       id="payload-unit-label"
+                      {...getFieldPathAttributes('unitLabel')}
                       value={getString(editablePayload.unitLabel)}
                       onChange={(event) => updateTopLevelField('unitLabel', event.target.value)}
                       className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
@@ -1983,6 +2443,7 @@ export function LessonBlueprintEditor({
                     <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Subtitle</label>
                     <input
                       id="payload-subtitle"
+                      {...getFieldPathAttributes('subtitle')}
                       value={getString(editablePayload.subtitle)}
                       onChange={(event) => updateTopLevelField('subtitle', event.target.value)}
                       className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
@@ -2002,6 +2463,7 @@ export function LessonBlueprintEditor({
                     <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Fallback learning objectives</label>
                     <textarea
                       id="payload-learning-objectives"
+                      {...getFieldPathAttributes('learningObjectives')}
                       rows={3}
                       value={toTextList(getStringArray(editablePayload.learningObjectives))}
                       onChange={(event) => updateTopLevelField('learningObjectives', parseTokenList(event.target.value))}
@@ -2018,6 +2480,7 @@ export function LessonBlueprintEditor({
                 <label htmlFor="payload-lesson-id" className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Lesson id</label>
                 <input
                   id="payload-lesson-id"
+                  {...getFieldPathAttributes('id')}
                   value={mode === 'create' ? form.blueprint_key : getString(editablePayload.id) || form.blueprint_key}
                   readOnly
                   className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
@@ -2030,6 +2493,7 @@ export function LessonBlueprintEditor({
                 <label htmlFor="payload-title" className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Title</label>
                 <input
                   id="payload-title"
+                  {...getFieldPathAttributes('title')}
                   value={getString(editablePayload.title)}
                   onChange={(event) => updateTopLevelField('title', event.target.value)}
                   className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
@@ -2039,6 +2503,7 @@ export function LessonBlueprintEditor({
                 <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Mode</label>
                 <input
                   id="payload-mode"
+                  {...getFieldPathAttributes('mode')}
                   value={getString(editablePayload.mode)}
                   onChange={(event) => updateTopLevelField('mode', event.target.value)}
                   className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
@@ -2048,6 +2513,7 @@ export function LessonBlueprintEditor({
                 <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Flow mode</label>
                 <input
                   id="payload-flow-mode"
+                  {...getFieldPathAttributes('flowMode')}
                   value={getString(editablePayload.flowMode)}
                   onChange={(event) => updateTopLevelField('flowMode', event.target.value)}
                   className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
@@ -2069,6 +2535,7 @@ export function LessonBlueprintEditor({
                 <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Description</label>
                 <textarea
                   id="payload-description"
+                  {...getFieldPathAttributes('description')}
                   value={getString(editablePayload.description)}
                   onChange={(event) => updateTopLevelField('description', event.target.value)}
                   rows={3}
@@ -2133,6 +2600,7 @@ export function LessonBlueprintEditor({
                 <div className="flex gap-2">
                   <input
                     id="payload-hero-image-url"
+                    {...getFieldPathAttributes('heroImageUrl')}
                     value={getString(editablePayload.heroImageUrl)}
                     readOnly
                     className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
@@ -2149,7 +2617,7 @@ export function LessonBlueprintEditor({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setAssetLibraryTargetFieldPath('heroImageUrl')}
+                    onClick={() => openAssetLibrary('heroImageUrl')}
                     className={`rounded-lg border px-3 py-2 text-xs font-medium ${
                       assetLibraryTargetFieldPath === 'heroImageUrl'
                         ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
@@ -2176,6 +2644,7 @@ export function LessonBlueprintEditor({
                 <div className="flex gap-2">
                   <input
                     id="payload-cover-image-url"
+                    {...getFieldPathAttributes('coverImageUrl')}
                     value={getString(editablePayload.coverImageUrl)}
                     readOnly
                     className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
@@ -2192,7 +2661,7 @@ export function LessonBlueprintEditor({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setAssetLibraryTargetFieldPath('coverImageUrl')}
+                    onClick={() => openAssetLibrary('coverImageUrl')}
                     className={`rounded-lg border px-3 py-2 text-xs font-medium ${
                       assetLibraryTargetFieldPath === 'coverImageUrl'
                         ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
@@ -2219,6 +2688,7 @@ export function LessonBlueprintEditor({
                 <div className="flex gap-2">
                   <input
                     id="payload-image-url"
+                    {...getFieldPathAttributes('imageUrl')}
                     value={getString(editablePayload.imageUrl)}
                     readOnly
                     className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
@@ -2235,7 +2705,7 @@ export function LessonBlueprintEditor({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setAssetLibraryTargetFieldPath('imageUrl')}
+                    onClick={() => openAssetLibrary('imageUrl')}
                     className={`rounded-lg border px-3 py-2 text-xs font-medium ${
                       assetLibraryTargetFieldPath === 'imageUrl'
                         ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
@@ -2262,6 +2732,7 @@ export function LessonBlueprintEditor({
                 <div className="flex gap-2">
                   <input
                     id="payload-audio-url"
+                    {...getFieldPathAttributes('audioUrl')}
                     value={getString(editablePayload.audioUrl)}
                     readOnly
                     className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
@@ -2278,7 +2749,7 @@ export function LessonBlueprintEditor({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setAssetLibraryTargetFieldPath('audioUrl')}
+                    onClick={() => openAssetLibrary('audioUrl')}
                     className={`rounded-lg border px-3 py-2 text-xs font-medium ${
                       assetLibraryTargetFieldPath === 'audioUrl'
                         ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
@@ -2363,124 +2834,62 @@ export function LessonBlueprintEditor({
             </div>
 
             <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950">
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Asset Library</h3>
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Media Library</h3>
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Reuse already uploaded assets, or upload directly into the selected media field.
+                    Use the Library button beside any media field to open a searchable picker for that exact slot.
                   </p>
                 </div>
-                <div className="min-w-[220px]">
-                  <div className="mb-1 text-right text-xs text-gray-500 dark:text-gray-400">Target field</div>
-                  <StyledSelect
-                    value={assetLibraryTargetFieldPath || ''}
-                    onChange={(event) => setAssetLibraryTargetFieldPath(event.target.value)}
-                    options={mediaFieldOptions.map((option) => ({
-                      value: option.value,
-                      label: option.label,
-                    }))}
-                    placeholder=""
-                    fullWidth
-                  />
+                <button
+                  type="button"
+                  onClick={() => setIsAssetLibraryModalOpen(true)}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-900 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                >
+                  Open library
+                </button>
+              </div>
+              {selectedAssetLibraryField ? (
+                <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                  <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 font-medium text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300">
+                    Target: {selectedAssetLibraryField.label}
+                  </span>
+                  <span>
+                    {compatibleLibraryAssets.length} compatible local asset{compatibleLibraryAssets.length === 1 ? '' : 's'}
+                  </span>
                 </div>
-              </div>
+              ) : null}
+            </div>
 
-              <div
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setIsAssetDropActive(true);
-                }}
-                onDragLeave={() => setIsAssetDropActive(false)}
-                onDrop={(event) => void handleAssetDrop(event)}
-                className={`mt-4 rounded-lg border-2 border-dashed px-4 py-5 text-sm transition ${
-                  isAssetDropActive
-                    ? 'border-brand-500 bg-brand-50 text-brand-700 dark:border-brand-500 dark:bg-brand-950/20 dark:text-brand-300'
-                    : 'border-gray-300 bg-white text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400'
-                }`}
-              >
-                {assetLibraryTargetFieldPath
-                  ? `Drop an ${inferAssetKindFromFieldPath(assetLibraryTargetFieldPath)} file here to upload directly to ${assetLibraryTargetFieldPath}.`
-                  : 'Choose the target field here, then drop a file to upload.'}
-              </div>
-
-              <div className="mt-4">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Existing uploaded assets
-                </h4>
-                {Object.entries(mediaBindings).length === 0 ? (
-                  <div className="mt-3 rounded-lg border border-dashed border-gray-300 px-3 py-4 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
-                    No media bindings yet for this blueprint payload.
+            <Modal
+              isOpen={isAssetLibraryModalOpen}
+              onClose={closeAssetLibrary}
+              title="Media Library"
+              maxWidth="full"
+              className="max-h-[92vh] overflow-hidden"
+            >
+              <div aria-label="Media library modal content" className="max-h-[calc(92vh-8rem)] space-y-5 overflow-y-auto pr-1">
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-6">
+                  <div className="lg:col-span-2">
+                    <div className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">Target field</div>
+                    <StyledSelect
+                      value={assetLibraryTargetFieldPath || ''}
+                      onChange={(event) => setAssetLibraryTargetFieldPath(event.target.value)}
+                      aria-label="Media library target field"
+                      options={mediaFieldOptions.map((option) => ({
+                        value: option.value,
+                        label: option.label,
+                      }))}
+                      placeholder=""
+                      fullWidth
+                    />
                   </div>
-                ) : (
-                  <div className="mt-3 space-y-3">
-                    {Object.entries(mediaBindings).map(([fieldPath, binding]) => {
-                      const isCompatible = assetLibraryTargetFieldPath
-                        ? isMediaBindingCompatible(binding, assetLibraryTargetFieldPath)
-                        : false;
-                      return (
-                        <div
-                          key={fieldPath}
-                          className="rounded-lg border border-gray-200 bg-white px-3 py-3 dark:border-gray-800 dark:bg-gray-900"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">{fieldPath}</div>
-                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                {binding.file_name || 'Unnamed asset'} • {(binding.asset_kind || inferAssetKindFromFieldPath(fieldPath)).toUpperCase()}
-                              </div>
-                              <div className="mt-3">
-                                <MediaLinkPreview
-                                  url={binding.asset_url}
-                                  label={binding.file_name || fieldPath}
-                                  kind={binding.asset_kind || inferAssetKindFromFieldPath(fieldPath)}
-                                  compact
-                                />
-                              </div>
-                            </div>
-                            {assetLibraryTargetFieldPath && (
-                              <button
-                                type="button"
-                                onClick={() => reuseAssetFromLibrary(fieldPath, assetLibraryTargetFieldPath)}
-                                disabled={!isCompatible}
-                                className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300"
-                              >
-                                Reuse
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {assetLibraryTargetFieldPath && (
-                  <div className="mt-4 rounded-lg border border-gray-200 bg-white px-3 py-3 text-sm dark:border-gray-800 dark:bg-gray-900">
-                    <div className="font-medium text-gray-900 dark:text-white">Compatible assets for target</div>
-                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {compatibleLibraryAssets.length} compatible asset{compatibleLibraryAssets.length === 1 ? '' : 's'} for {assetLibraryTargetFieldPath}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-6">
-                <div className="flex items-center justify-between gap-3">
                   <div>
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                      Global asset browser
-                    </h4>
-                    <Link
-                      href="/content/curriculum/assets"
-                      className="mt-1 inline-flex text-xs font-medium text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-200"
-                    >
-                      Open full asset library
-                    </Link>
-                  </div>
-                  <div className="flex w-full max-w-md gap-2">
+                    <div className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">Scope</div>
                     <StyledSelect
                       value={assetLibraryScope}
                       onChange={(event) => setAssetLibraryScope(event.target.value as 'same_course' | 'all_courses')}
+                      aria-label="Media library scope"
                       options={[
                         { value: 'same_course', label: 'Same course' },
                         { value: 'all_courses', label: 'All courses' },
@@ -2488,75 +2897,254 @@ export function LessonBlueprintEditor({
                       placeholder=""
                       fullWidth
                     />
-                    <input
-                      value={globalAssetSearch}
-                      onChange={(event) => setGlobalAssetSearch(event.target.value)}
-                      placeholder="Search blueprint, file, field path"
-                      className="w-full max-w-xs rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                  </div>
+                  <div>
+                    <div className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">Sort</div>
+                    <StyledSelect
+                      value={assetLibrarySort}
+                      onChange={(event) => setAssetLibrarySort(event.target.value as 'recent' | 'name' | 'source')}
+                      aria-label="Media library sort"
+                      options={[
+                        { value: 'recent', label: 'Newest first' },
+                        { value: 'name', label: 'File name' },
+                        { value: 'source', label: 'Field/source' },
+                      ]}
+                      placeholder=""
+                      fullWidth
+                    />
+                  </div>
+                  <div>
+                    <div className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">Asset type</div>
+                    <StyledSelect
+                      value={assetLibraryKindFilter}
+                      onChange={(event) => setAssetLibraryKindFilter(event.target.value as 'all' | 'image' | 'audio' | 'video')}
+                      aria-label="Media library asset type"
+                      options={[
+                        { value: 'all', label: 'All types' },
+                        { value: 'image', label: 'Images' },
+                        { value: 'audio', label: 'Audio' },
+                        { value: 'video', label: 'Video' },
+                      ]}
+                      placeholder=""
+                      fullWidth
+                    />
+                  </div>
+                  <div>
+                    <div className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">Show</div>
+                    <StyledSelect
+                      value={assetLibraryCompatibilityFilter}
+                      onChange={(event) => setAssetLibraryCompatibilityFilter(event.target.value as 'all' | 'compatible')}
+                      aria-label="Media library compatibility"
+                      options={[
+                        { value: 'all', label: 'All results' },
+                        { value: 'compatible', label: 'Compatible only' },
+                      ]}
+                      placeholder=""
+                      fullWidth
                     />
                   </div>
                 </div>
 
-                {isGlobalAssetLibraryLoading ? (
-                  <div className="mt-3 rounded-lg border border-dashed border-gray-300 px-3 py-4 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
-                    Loading reusable assets…
+                <div>
+                  <div className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">Search</div>
+                  <input
+                    value={globalAssetSearch}
+                    onChange={(event) => setGlobalAssetSearch(event.target.value)}
+                    aria-label="Search media library"
+                    placeholder="Search file name, blueprint, or field path"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                  />
+                </div>
+
+                <div
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    setIsAssetDropActive(true);
+                  }}
+                  onDragLeave={() => setIsAssetDropActive(false)}
+                  onDrop={(event) => void handleAssetDrop(event)}
+                  className={`rounded-lg border-2 border-dashed px-4 py-5 text-sm transition ${
+                    isAssetDropActive
+                      ? 'border-brand-500 bg-brand-50 text-brand-700 dark:border-brand-500 dark:bg-brand-950/20 dark:text-brand-300'
+                      : 'border-gray-300 bg-gray-50 text-gray-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-400'
+                  }`}
+                >
+                  {assetLibraryTargetFieldPath
+                    ? `Drop an ${inferAssetKindFromFieldPath(assetLibraryTargetFieldPath)} file here to upload directly to ${assetLibraryTargetFieldPath}.`
+                    : 'Choose the target field first, then drop a file to upload.'}
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAssetLibraryTab('local')}
+                      aria-pressed={assetLibraryTab === 'local'}
+                      className={`rounded-full px-3 py-2 text-xs font-medium transition ${
+                        assetLibraryTab === 'local'
+                          ? 'bg-brand-600 text-white'
+                          : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      Local assets ({filteredBlueprintLibraryAssets.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAssetLibraryTab('global')}
+                      aria-pressed={assetLibraryTab === 'global'}
+                      className={`rounded-full px-3 py-2 text-xs font-medium transition ${
+                        assetLibraryTab === 'global'
+                          ? 'bg-brand-600 text-white'
+                          : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      Global assets ({sortedGlobalAssetLibraryItems.length})
+                    </button>
                   </div>
-                ) : globalAssetLibraryItems.length === 0 ? (
-                  <div className="mt-3 rounded-lg border border-dashed border-gray-300 px-3 py-4 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
-                    No reusable assets found for the current course and filter.
-                  </div>
-                ) : (
-                  <div className="mt-3 space-y-3">
-                    {globalAssetLibraryItems.map((item) => {
-                      const isCompatible = assetLibraryTargetFieldPath
-                        ? isMediaBindingCompatible(item.binding, assetLibraryTargetFieldPath)
-                        : false;
-                      return (
-                        <div
-                          key={`${item.blueprint_id}:${item.field_path}:${item.binding.storage_key}`}
-                          className="rounded-lg border border-gray-200 bg-white px-3 py-3 dark:border-gray-800 dark:bg-gray-900"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                {item.binding.file_name || item.field_path}
-                              </div>
-                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                {item.blueprint_key} • {item.field_path} • {(item.binding.asset_kind || inferAssetKindFromFieldPath(item.field_path)).toUpperCase()}
-                              </div>
-                              <div className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                                {item.course_key || 'Unknown course'}
-                                {assetLibraryScope === 'all_courses' && selectedCourse?.course_key && item.course_key !== selectedCourse.course_key
-                                  ? ' • cross-course'
-                                  : ''}
-                              </div>
-                              <div className="mt-3">
-                                <MediaLinkPreview
-                                  url={item.binding.asset_url}
-                                  label={item.binding.file_name || item.field_path}
-                                  kind={item.binding.asset_kind || inferAssetKindFromFieldPath(item.field_path)}
-                                  compact
-                                />
+
+                  {assetLibraryTab === 'local' ? (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-900 dark:text-white">This blueprint</h4>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          Existing uploads already attached to this draft.
+                        </p>
+                      </div>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{filteredBlueprintLibraryAssets.length} items</span>
+                    </div>
+
+                    {filteredBlueprintLibraryAssets.length === 0 ? (
+                      <div className="mt-4 rounded-lg border border-dashed border-gray-300 px-3 py-4 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                        No local assets match the current search.
+                      </div>
+                    ) : (
+                      <div
+                        aria-label="Local media asset grid"
+                        className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5"
+                      >
+                        {filteredBlueprintLibraryAssets.map(([fieldPath, binding]) => {
+                          const isCompatible = assetLibraryTargetFieldPath
+                            ? isMediaBindingCompatible(binding, assetLibraryTargetFieldPath)
+                            : false;
+                          return (
+                            <div
+                              key={fieldPath}
+                              className="flex h-full flex-col rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900"
+                            >
+                              <div className="flex h-full flex-col gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-sm font-medium text-gray-900 dark:text-white">{binding.file_name || fieldPath}</div>
+                                  <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    {fieldPath} • {(binding.asset_kind || inferAssetKindFromFieldPath(fieldPath)).toUpperCase()}
+                                  </div>
+                                  <div className="mt-3">
+                                    <MediaLinkPreview
+                                      url={binding.asset_url}
+                                      label={binding.file_name || fieldPath}
+                                      kind={binding.asset_kind || inferAssetKindFromFieldPath(fieldPath)}
+                                      compact
+                                    />
+                                  </div>
+                                </div>
+                                {assetLibraryTargetFieldPath ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => reuseAssetFromLibrary(fieldPath, assetLibraryTargetFieldPath)}
+                                    disabled={!isCompatible}
+                                    className="mt-auto rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300"
+                                  >
+                                    Select
+                                  </button>
+                                ) : null}
                               </div>
                             </div>
-                            {assetLibraryTargetFieldPath && (
-                              <button
-                                type="button"
-                                onClick={() => reuseGlobalLibraryAsset(item, assetLibraryTargetFieldPath)}
-                                disabled={!isCompatible}
-                                className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300"
-                              >
-                                Reuse
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                )}
+                  ) : (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Reusable library</h4>
+                        <Link
+                          href="/content/curriculum/assets"
+                          className="mt-1 inline-flex text-xs font-medium text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-200"
+                        >
+                          Open full asset library
+                        </Link>
+                      </div>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{sortedGlobalAssetLibraryItems.length} items</span>
+                    </div>
+
+                    {isGlobalAssetLibraryLoading ? (
+                      <div className="mt-4 rounded-lg border border-dashed border-gray-300 px-3 py-4 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                        Loading reusable assets…
+                      </div>
+                    ) : sortedGlobalAssetLibraryItems.length === 0 ? (
+                      <div className="mt-4 rounded-lg border border-dashed border-gray-300 px-3 py-4 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                        No reusable assets found for the current filters.
+                      </div>
+                    ) : (
+                      <div
+                        aria-label="Global media asset grid"
+                        className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5"
+                      >
+                        {sortedGlobalAssetLibraryItems.map((item) => {
+                          const isCompatible = assetLibraryTargetFieldPath
+                            ? isMediaBindingCompatible(item.binding, assetLibraryTargetFieldPath)
+                            : false;
+                          return (
+                            <div
+                              key={`${item.blueprint_id}:${item.field_path}:${item.binding.storage_key}`}
+                              className="flex h-full flex-col rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900"
+                            >
+                              <div className="flex h-full flex-col gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                    {item.binding.file_name || item.field_path}
+                                  </div>
+                                  <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    {item.blueprint_key} • {item.field_path} • {(item.binding.asset_kind || inferAssetKindFromFieldPath(item.field_path)).toUpperCase()}
+                                  </div>
+                                  <div className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                                    {item.course_key || 'Unknown course'}
+                                    {assetLibraryScope === 'all_courses' && selectedCourse?.course_key && item.course_key !== selectedCourse.course_key
+                                      ? ' • cross-course'
+                                      : ''}
+                                  </div>
+                                  <div className="mt-3">
+                                    <MediaLinkPreview
+                                      url={item.binding.asset_url}
+                                      label={item.binding.file_name || item.field_path}
+                                      kind={item.binding.asset_kind || inferAssetKindFromFieldPath(item.field_path)}
+                                      compact
+                                    />
+                                  </div>
+                                </div>
+                                {assetLibraryTargetFieldPath ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => reuseGlobalLibraryAsset(item, assetLibraryTargetFieldPath)}
+                                    disabled={!isCompatible}
+                                    className="mt-auto rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300"
+                                  >
+                                    Select
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  )}
+                </div>
               </div>
-            </div>
+            </Modal>
 
             <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950">
               <div className="flex items-center justify-between gap-3">
@@ -2899,6 +3487,7 @@ export function LessonBlueprintEditor({
                                             <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Image URL</label>
                                             <div className="flex gap-2">
                                               <input
+                                                {...getFieldPathAttributes(imageFieldPath)}
                                                 value={getString(option.imageUrl)}
                                                 readOnly
                                                 className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
@@ -2915,7 +3504,7 @@ export function LessonBlueprintEditor({
                                               </button>
                                               <button
                                                 type="button"
-                                                onClick={() => setAssetLibraryTargetFieldPath(imageFieldPath)}
+                                                onClick={() => openAssetLibrary(imageFieldPath)}
                                                 className={`rounded-lg border px-3 py-2 text-xs font-medium ${
                                                   assetLibraryTargetFieldPath === imageFieldPath
                                                     ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
@@ -3096,6 +3685,7 @@ export function LessonBlueprintEditor({
                                           <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Pair audio URL</label>
                                           <div className="flex gap-2">
                                             <input
+                                              {...getFieldPathAttributes(pairAudioFieldPath)}
                                               value={getString(pair.audioUrl)}
                                               readOnly
                                               className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
@@ -3112,7 +3702,7 @@ export function LessonBlueprintEditor({
                                             </button>
                                             <button
                                               type="button"
-                                              onClick={() => setAssetLibraryTargetFieldPath(pairAudioFieldPath)}
+                                              onClick={() => openAssetLibrary(pairAudioFieldPath)}
                                               className={`rounded-lg border px-3 py-2 text-xs font-medium ${
                                                 assetLibraryTargetFieldPath === pairAudioFieldPath
                                                   ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
@@ -3132,6 +3722,7 @@ export function LessonBlueprintEditor({
                                           <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Pair image URL</label>
                                           <div className="flex gap-2">
                                             <input
+                                              {...getFieldPathAttributes(pairImageFieldPath)}
                                               value={getString(pair.imageUrl)}
                                               readOnly
                                               className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
@@ -3148,7 +3739,7 @@ export function LessonBlueprintEditor({
                                             </button>
                                             <button
                                               type="button"
-                                              onClick={() => setAssetLibraryTargetFieldPath(pairImageFieldPath)}
+                                              onClick={() => openAssetLibrary(pairImageFieldPath)}
                                               className={`rounded-lg border px-3 py-2 text-xs font-medium ${
                                                 assetLibraryTargetFieldPath === pairImageFieldPath
                                                   ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
@@ -3183,6 +3774,7 @@ export function LessonBlueprintEditor({
                           <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Image URL</label>
                           <div className="flex gap-2">
                             <input
+                              {...getFieldPathAttributes(`steps[${index}].imageUrl`)}
                               value={getString(step.imageUrl)}
                               readOnly
                               className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
@@ -3199,7 +3791,7 @@ export function LessonBlueprintEditor({
                             </button>
                             <button
                               type="button"
-                              onClick={() => setAssetLibraryTargetFieldPath(`steps[${index}].imageUrl`)}
+                              onClick={() => openAssetLibrary(`steps[${index}].imageUrl`)}
                               className={`rounded-lg border px-3 py-2 text-xs font-medium ${
                                 assetLibraryTargetFieldPath === `steps[${index}].imageUrl`
                                   ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
@@ -3225,6 +3817,7 @@ export function LessonBlueprintEditor({
                           <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Audio URL</label>
                           <div className="flex gap-2">
                             <input
+                              {...getFieldPathAttributes(`steps[${index}].audioUrl`)}
                               value={getString(step.audioUrl)}
                               readOnly
                               className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
@@ -3241,7 +3834,7 @@ export function LessonBlueprintEditor({
                             </button>
                             <button
                               type="button"
-                              onClick={() => setAssetLibraryTargetFieldPath(`steps[${index}].audioUrl`)}
+                              onClick={() => openAssetLibrary(`steps[${index}].audioUrl`)}
                               className={`rounded-lg border px-3 py-2 text-xs font-medium ${
                                 assetLibraryTargetFieldPath === `steps[${index}].audioUrl`
                                   ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'

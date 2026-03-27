@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { FiExternalLink, FiFileText, FiImage, FiPause, FiPlay, FiVideo, FiVolume2 } from 'react-icons/fi';
 
 type MediaKind = 'image' | 'audio' | 'video' | 'file';
 
@@ -76,18 +77,32 @@ export default function MediaLinkPreview({
   };
 
   const previewHeightClass = compact ? 'h-16' : 'h-28';
+  const previewWidthClass = compact ? 'w-16' : 'w-24';
+
+  const mediaBadge =
+    resolvedKind === 'image' ? (
+      <FiImage className="h-4 w-4" aria-hidden="true" />
+    ) : resolvedKind === 'audio' ? (
+      <FiVolume2 className="h-4 w-4" aria-hidden="true" />
+    ) : resolvedKind === 'video' ? (
+      <FiVideo className="h-4 w-4" aria-hidden="true" />
+    ) : (
+      <FiFileText className="h-4 w-4" aria-hidden="true" />
+    );
 
   return (
     <div className="group rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-950">
       <div className="flex items-start gap-3">
         {resolvedKind === 'image' ? (
-          <div className="relative w-24 flex-shrink-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={url}
-              alt={label || 'Media preview'}
-              className={`${previewHeightClass} w-24 rounded-lg object-cover`}
-            />
+          <div className={`relative ${previewWidthClass} flex-shrink-0`}>
+            <a href={url} target="_blank" rel="noreferrer" title={url} aria-label={label ? `Open ${label}` : 'Open image'}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={url}
+                alt={label || 'Media preview'}
+                className={`${previewHeightClass} ${previewWidthClass} rounded-lg object-cover`}
+              />
+            </a>
             {onRemove ? (
               <button
                 type="button"
@@ -103,40 +118,54 @@ export default function MediaLinkPreview({
         ) : resolvedKind === 'video' ? (
           <video
             controls
-            className={`${previewHeightClass} w-24 flex-shrink-0 rounded-lg bg-black object-cover`}
+            className={`${previewHeightClass} ${previewWidthClass} flex-shrink-0 rounded-lg bg-black object-cover`}
             src={url}
             aria-label={label || 'Video preview'}
           />
         ) : resolvedKind === 'audio' ? (
-          <div className="flex min-w-[7rem] flex-shrink-0 flex-col gap-2">
+          <div className="flex min-w-[12rem] flex-shrink-0 items-center gap-2 rounded-lg border border-gray-200 bg-white px-2 py-2 dark:border-gray-700 dark:bg-gray-900">
             <button
               type="button"
               onClick={() => void toggleAudio()}
-              className="rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 dark:border-brand-800 dark:bg-gray-900 dark:text-brand-300 dark:hover:bg-brand-950/30"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-300 bg-white text-brand-700 hover:bg-brand-50 dark:border-brand-800 dark:bg-gray-950 dark:text-brand-300 dark:hover:bg-brand-950/30"
+              aria-label={isPlaying ? 'Pause audio' : 'Play audio'}
+              title={isPlaying ? 'Pause audio' : 'Play audio'}
             >
-              {isPlaying ? 'Pause audio' : 'Play audio'}
+              {isPlaying ? <FiPause className="h-4 w-4" aria-hidden="true" /> : <FiPlay className="h-4 w-4" aria-hidden="true" />}
             </button>
-            <audio ref={audioRef} controls preload="none" className="w-full" src={url} aria-label={label || 'Audio preview'} />
+            <audio
+              ref={audioRef}
+              controls
+              preload="none"
+              className={compact ? 'h-9 w-full min-w-0' : 'w-full'}
+              src={url}
+              aria-label={label || 'Audio preview'}
+            />
           </div>
         ) : (
-          <div className={`${previewHeightClass} flex w-24 flex-shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-300 text-xs font-medium uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:text-gray-400`}>
-            File
+          <div className={`${previewHeightClass} ${previewWidthClass} flex flex-shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-300 text-gray-500 dark:border-gray-700 dark:text-gray-400`}>
+            <FiFileText className="h-5 w-5" aria-hidden="true" />
           </div>
         )}
 
         <div className="min-w-0 flex-1">
-          {label ? (
-            <div className="text-sm font-medium text-gray-900 dark:text-white">{label}</div>
-          ) : null}
-          <div className="mt-1 break-all text-xs text-gray-500 dark:text-gray-400">{url}</div>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              {label ? <div className="truncate text-sm font-medium text-gray-900 dark:text-white">{label}</div> : null}
+              <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">
+                {mediaBadge}
+                <span>{resolvedKind}</span>
+              </div>
+            </div>
             <a
               href={url}
               target="_blank"
               rel="noreferrer"
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+              title={url}
+              aria-label={label ? `Open ${label} in a new tab` : `Open ${resolvedKind} in a new tab`}
+              className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
             >
-              Open {resolvedKind}
+              <FiExternalLink className="h-4 w-4" aria-hidden="true" />
             </a>
           </div>
         </div>
