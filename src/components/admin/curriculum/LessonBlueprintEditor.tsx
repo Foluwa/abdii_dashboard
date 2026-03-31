@@ -826,7 +826,7 @@ export function LessonBlueprintEditor({
     if (hasAppliedInitialBlueprintKeyRef.current) return;
 
     setForm((prev) => {
-      if (prev.blueprint_key.trim()) return prev;
+      if (prev.blueprint_key?.trim()) return prev;
       hasAppliedInitialBlueprintKeyRef.current = true;
       return {
         ...prev,
@@ -1088,12 +1088,12 @@ export function LessonBlueprintEditor({
 
   useEffect(() => {
     if (mode !== 'create') return;
-    if (!form.blueprint_key.trim()) return;
-    if (getString(editablePayload.id) === form.blueprint_key.trim()) return;
+    if (!form.blueprint_key?.trim()) return;
+    if (getString(editablePayload.id) === form.blueprint_key?.trim()) return;
 
     const nextPayload = {
       ...editablePayload,
-      id: form.blueprint_key.trim(),
+      id: form.blueprint_key?.trim(),
     };
     setLastValidPayload(nextPayload);
     setPayloadText(JSON.stringify(nextPayload, null, 2));
@@ -1110,7 +1110,7 @@ export function LessonBlueprintEditor({
     if (hasCompactReadingPayload && !hasLegacyReadingPayload) return;
 
     const fallbackLessonKey =
-      form.blueprint_key.trim() || managedBlueprintKey || getString(editablePayload.id) || 'lesson_reading_practice_01';
+      form.blueprint_key?.trim() || managedBlueprintKey || getString(editablePayload.id) || 'lesson_reading_practice_01';
     const normalizedPayload = buildCompactReadingPayload(editablePayload, fallbackLessonKey);
     replacePayload(normalizedPayload);
   }, [
@@ -1504,7 +1504,7 @@ export function LessonBlueprintEditor({
         step.pairs = pairs;
         if (phraseTarget) {
           const existingTargets = getObjectArray(step.learningTargets).filter(
-            (target) => getString(getObject(target).itemId) !== phrase.id
+            (target) => getString(getObject(target)?.itemId) !== phrase.id
           );
           step.learningTargets = [...existingTargets, phraseTarget];
         }
@@ -1539,7 +1539,7 @@ export function LessonBlueprintEditor({
     const payload = parsePayload();
     if (!payload) return null;
 
-    const effectiveBlueprintKey = form.blueprint_key.trim() || managedBlueprintKey.trim();
+    const effectiveBlueprintKey = form.blueprint_key?.trim() || managedBlueprintKey?.trim();
 
     if (!effectiveBlueprintKey) {
       setErrorMessage('Blueprint key is required.');
@@ -1979,7 +1979,7 @@ export function LessonBlueprintEditor({
                           {...getFieldPathAttributes('presentation.estimatedMinutes')}
                           type="number"
                           min={1}
-                          value={readingPresentation.estimatedMinutes ?? ''}
+                          value={(readingPresentation.estimatedMinutes as number | undefined) ?? ''}
                           onChange={(event) =>
                             updateReadingPresentationField('estimatedMinutes', Number(event.target.value || 0) || null)
                           }
@@ -1992,7 +1992,7 @@ export function LessonBlueprintEditor({
                           {...getFieldPathAttributes('presentation.exerciseOrderVersion')}
                           type="number"
                           min={1}
-                          value={readingPresentation.exerciseOrderVersion ?? ''}
+                          value={(readingPresentation.exerciseOrderVersion as number | undefined) ?? ''}
                           onChange={(event) =>
                             updateReadingPresentationField('exerciseOrderVersion', Number(event.target.value || 1))
                           }
@@ -2230,7 +2230,7 @@ export function LessonBlueprintEditor({
                     <input
                       type="number"
                       min={1}
-                      value={editablePayload.exerciseOrderVersion ?? ''}
+                      value={(editablePayload.exerciseOrderVersion as number | undefined) ?? ''}
                       onChange={(event) => updateTopLevelField('exerciseOrderVersion', Number(event.target.value || 1))}
                       className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                     />
@@ -2366,7 +2366,7 @@ export function LessonBlueprintEditor({
                     <input
                       type="number"
                       min={1}
-                      value={editablePayload.exerciseOrderVersion ?? ''}
+                      value={(editablePayload.exerciseOrderVersion as number | undefined) ?? ''}
                       onChange={(event) => updateTopLevelField('exerciseOrderVersion', Number(event.target.value || 1))}
                       className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                     />
@@ -2454,7 +2454,7 @@ export function LessonBlueprintEditor({
                     <input
                       type="number"
                       min={1}
-                      value={editablePayload.exerciseOrderVersion ?? ''}
+                      value={(editablePayload.exerciseOrderVersion as number | undefined) ?? ''}
                       onChange={(event) => updateTopLevelField('exerciseOrderVersion', Number(event.target.value || 1))}
                       className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                     />
@@ -2481,7 +2481,7 @@ export function LessonBlueprintEditor({
                 <input
                   id="payload-lesson-id"
                   {...getFieldPathAttributes('id')}
-                  value={mode === 'create' ? form.blueprint_key : getString(editablePayload.id) || form.blueprint_key}
+                  value={mode === 'create' ? (form.blueprint_key ?? '') : (getString(editablePayload.id) || form.blueprint_key || '')}
                   readOnly
                   className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
                 />
@@ -3312,7 +3312,7 @@ export function LessonBlueprintEditor({
                               <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Number value</label>
                               <input
                                 type="number"
-                                value={step.numberValue ?? ''}
+                                value={(step.numberValue as number | undefined) ?? ''}
                                 onChange={(event) => updateStepField(index, 'numberValue', Number(event.target.value || 0) || null)}
                                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                               />

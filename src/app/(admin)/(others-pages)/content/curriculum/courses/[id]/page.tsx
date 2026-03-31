@@ -63,7 +63,7 @@ function getQaStatusBadge(status: string) {
   if (status === 'passed') return <StatusBadge status="success" label="Passed" />;
   if (status === 'pending_manual') return <StatusBadge status="pending" label="Pending manual" />;
   if (status === 'not_applicable') return <StatusBadge status="info" label="N/A" />;
-  if (status === 'blocked') return <StatusBadge status="danger" label="Blocked" />;
+  if (status === 'blocked') return <StatusBadge status="error" label="Blocked" />;
   return <StatusBadge status="info" label={status || 'Unknown'} />;
 }
 

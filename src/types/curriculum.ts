@@ -306,6 +306,8 @@ export interface LessonBlueprintAdminListItem {
   warning_count: number;
   created_at: string;
   updated_at: string;
+  review_status?: 'published' | 'needs_review' | 'draft_only' | string;
+  has_unpublished_changes?: boolean;
 }
 
 export type LessonBlueprintAdminListResponse = AdminPaginatedListResponse<LessonBlueprintAdminListItem>;

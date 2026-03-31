@@ -256,7 +256,7 @@ function collectTopLevelMedia(payload: Record<string, unknown>) {
 
   return candidates
     .map(([label, value]) => ({ label, value: asString(value) }))
-    .filter((item): item is { label: string; value: string } => Boolean(item.value));
+    .filter((item): item is { label: (typeof candidates)[number][0]; value: string } => Boolean(item.value));
 }
 
 function collectCompactReadingTargetRefs(payload: Record<string, unknown>) {
