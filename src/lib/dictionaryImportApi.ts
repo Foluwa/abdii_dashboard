@@ -3,6 +3,7 @@ import type {
   DictionaryImportApplyResponse,
   DictionaryImportBatchDetail,
   DictionaryImportBatchListItem,
+  DictionaryImportGoogleSheetValidateRequest,
   DictionaryImportValidateResponse,
 } from '@/types/dictionaryImport';
 
@@ -17,6 +18,7 @@ export async function validateDictionaryImport(file: File) {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      timeout: 120000, // 2 minutes for large files
     }
   );
   return res.data;
@@ -25,7 +27,19 @@ export async function validateDictionaryImport(file: File) {
 export async function applyDictionaryImport(batchId: string) {
   const res = await apiClient.post<DictionaryImportApplyResponse>(
     '/api/v1/admin/dictionary-import/apply',
-    { batch_id: batchId }
+    { batch_id: batchId },
+    { timeout: 300000 } // 5 minutes for apply operation
+  );
+  return res.data;
+}
+
+export async function validateDictionaryImportFromGoogleSheet(
+  payload: DictionaryImportGoogleSheetValidateRequest
+) {
+  const res = await apiClient.post<DictionaryImportValidateResponse>(
+    '/api/v1/admin/dictionary-import/validate/google-sheet',
+    payload,
+    { timeout: 120000 } // 2 minutes for large sheets
   );
   return res.data;
 }

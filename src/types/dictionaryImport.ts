@@ -72,6 +72,14 @@ export interface DictionaryImportValidateResponse {
   finished_at?: string | null;
 }
 
+export interface DictionaryImportGoogleSheetValidateRequest {
+  pair_code: string;
+  worksheet_title: string;
+  sheet_url?: string;
+  spreadsheet_id?: string;
+  header_row?: number;
+}
+
 export interface DictionaryImportApplyResponse {
   batch_id?: string | null;
   valid: boolean;

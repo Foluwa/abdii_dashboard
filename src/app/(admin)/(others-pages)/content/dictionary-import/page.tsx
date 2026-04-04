@@ -9,6 +9,7 @@ import {
   applyDictionaryImport,
   listDictionaryImportBatches,
   validateDictionaryImport,
+  validateDictionaryImportFromGoogleSheet,
 } from '@/lib/dictionaryImportApi';
 import type {
   DictionaryImportApplyResponse,
@@ -85,6 +86,11 @@ function IssueTable({ issues }: { issues: DictionaryImportIssuePayload[] }) {
 export default function DictionaryImportPage() {
   const toast = useToast();
   const [file, setFile] = useState<File | null>(null);
+  const [sheetReference, setSheetReference] = useState('');
+  const [worksheetTitle, setWorksheetTitle] = useState('Yoruba');
+  const [pairCode, setPairCode] = useState('eng_yor');
+  const [headerRow, setHeaderRow] = useState(1);
+  const [activeSourceLabel, setActiveSourceLabel] = useState<string | null>(null);
   const [validation, setValidation] = useState<DictionaryImportValidateResponse | null>(null);
   const [applyResult, setApplyResult] = useState<DictionaryImportApplyResponse | null>(null);
   const [history, setHistory] = useState<DictionaryImportBatchListItem[]>([]);
@@ -108,6 +114,16 @@ export default function DictionaryImportPage() {
     void refreshHistory();
   }, [refreshHistory]);
 
+  const hasInFlightHistory = history.some((batch) => batch.status === 'validating' || batch.status === 'applying');
+
+  useEffect(() => {
+    if (!validating && !applying && !hasInFlightHistory) return;
+    const intervalId = window.setInterval(() => {
+      void refreshHistory();
+    }, 4000);
+    return () => window.clearInterval(intervalId);
+  }, [applying, hasInFlightHistory, refreshHistory, validating]);
+
   const currentBatchId = validation?.batch_id ?? applyResult?.batch_id ?? null;
   const canApply = Boolean(validation?.valid && validation?.batch_id && !applying);
 
@@ -123,6 +139,7 @@ export default function DictionaryImportPage() {
     try {
       const result = await validateDictionaryImport(file);
       setValidation(result);
+      setActiveSourceLabel(file.name);
       if (result.valid) {
         toast.success(`Validated ${file.name}`);
       } else {
@@ -131,6 +148,50 @@ export default function DictionaryImportPage() {
       await refreshHistory();
     } catch (error: any) {
       toast.error(error?.response?.data?.detail ?? error?.message ?? 'Validation failed');
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  const handleValidateGoogleSheet = async () => {
+    const trimmedReference = sheetReference.trim();
+    const trimmedWorksheet = worksheetTitle.trim();
+    const trimmedPairCode = pairCode.trim().toLowerCase();
+
+    if (!trimmedReference) {
+      toast.error('Enter a Google Sheet URL or spreadsheet ID first.');
+      return;
+    }
+    if (!trimmedWorksheet) {
+      toast.error('Enter the worksheet title to import.');
+      return;
+    }
+    if (!trimmedPairCode) {
+      toast.error('Enter a pair code like eng_yor.');
+      return;
+    }
+
+    setValidating(true);
+    setApplyResult(null);
+    try {
+      const result = await validateDictionaryImportFromGoogleSheet({
+        pair_code: trimmedPairCode,
+        worksheet_title: trimmedWorksheet,
+        header_row: headerRow,
+        ...(trimmedReference.startsWith('http')
+          ? { sheet_url: trimmedReference }
+          : { spreadsheet_id: trimmedReference }),
+      });
+      setValidation(result);
+      setActiveSourceLabel(`Google Sheet ${trimmedPairCode} / ${trimmedWorksheet}`);
+      if (result.valid) {
+        toast.success(`Validated Google Sheet tab ${trimmedWorksheet}`);
+      } else {
+        toast.error(`Validation failed for Google Sheet tab ${trimmedWorksheet}`);
+      }
+      await refreshHistory();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail ?? error?.message ?? 'Google Sheets validation failed');
     } finally {
       setValidating(false);
     }
@@ -158,9 +219,12 @@ export default function DictionaryImportPage() {
       <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-100">
         <div className="font-semibold">Google Sheets Workflow</div>
         <div className="mt-1">
-          Export one bilingual tab as a CSV named like <span className="font-mono">eng_yor.csv</span> or <span className="font-mono">eng_ibo.csv</span>.
+          You can now validate directly from Google Sheets or export one bilingual tab as a CSV named like <span className="font-mono">eng_yor.csv</span> or <span className="font-mono">eng_ibo.csv</span>.
           Required columns: <span className="font-mono">source_row_key</span>, <span className="font-mono">lemma</span>, <span className="font-mono">pos</span>, <span className="font-mono">meaning_hint</span>, <span className="font-mono">gloss_text</span>, <span className="font-mono">example_source</span>, <span className="font-mono">example_translation</span>, <span className="font-mono">review_status</span>.
           Languages are inferred from the filename.
+        </div>
+        <div className="mt-2">
+          Stable re-imports depend on a permanent <span className="font-mono">source_row_key</span>. Avoid row-number IDs that change when the sheet is reordered, and set <span className="font-mono">meaning_hint</span> when a lemma has multiple senses.
         </div>
       </div>
 
@@ -168,9 +232,9 @@ export default function DictionaryImportPage() {
         <section className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-white/[0.03]">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Import CSV</h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Import Sources</h2>
               <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-                Validate first. Apply only after the batch is clean enough to promote.
+                Validate first. Apply only after the batch is clean enough to promote. Batch history auto-refreshes while validations or applies are running.
               </p>
             </div>
             {currentBatchId ? (
@@ -184,34 +248,121 @@ export default function DictionaryImportPage() {
           </div>
 
           <div className="mt-6 space-y-4">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
-                Pair CSV
-              </label>
-              <input
-                type="file"
-                accept=".csv,text/csv"
-                onChange={(event) => {
-                  const next = event.target.files?.[0] ?? null;
-                  setFile(next);
-                  setValidation(null);
-                  setApplyResult(null);
-                }}
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-              />
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Expected filename format: <span className="font-mono">eng_yor.csv</span>, <span className="font-mono">eng_ibo.csv</span>.
-              </p>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-emerald-900 dark:text-emerald-100">Google Sheet</h3>
+                  <p className="mt-1 text-sm text-emerald-900/80 dark:text-emerald-100/80">
+                    Pull one worksheet directly from Google Sheets and run it through the same validate and apply pipeline used for CSV uploads.
+                  </p>
+                </div>
+                <button
+                  onClick={handleValidateGoogleSheet}
+                  disabled={validating}
+                  className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {validating ? 'Validating...' : 'Validate from Sheet'}
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-emerald-950 dark:text-emerald-100">
+                    Sheet URL or Spreadsheet ID
+                  </label>
+                  <input
+                    type="text"
+                    value={sheetReference}
+                    onChange={(event) => setSheetReference(event.target.value)}
+                    placeholder="https://docs.google.com/spreadsheets/d/... or spreadsheet ID"
+                    className="block w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm text-gray-900 dark:border-emerald-500/20 dark:bg-gray-900 dark:text-gray-100"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-emerald-950 dark:text-emerald-100">
+                    Worksheet Title
+                  </label>
+                  <input
+                    type="text"
+                    value={worksheetTitle}
+                    onChange={(event) => setWorksheetTitle(event.target.value)}
+                    className="block w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm text-gray-900 dark:border-emerald-500/20 dark:bg-gray-900 dark:text-gray-100"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-emerald-950 dark:text-emerald-100">
+                    Pair Code
+                  </label>
+                  <input
+                    type="text"
+                    value={pairCode}
+                    onChange={(event) => setPairCode(event.target.value)}
+                    placeholder="eng_yor"
+                    className="block w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm text-gray-900 dark:border-emerald-500/20 dark:bg-gray-900 dark:text-gray-100"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-emerald-950 dark:text-emerald-100">
+                    Header Row
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={25}
+                    value={headerRow}
+                    onChange={(event) => setHeaderRow(Number(event.target.value) || 1)}
+                    className="block w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm text-gray-900 dark:border-emerald-500/20 dark:bg-gray-900 dark:text-gray-100"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 p-4 dark:border-gray-800">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-200">CSV Upload</h3>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                  Use this when you want a manual export snapshot from Sheets or another source.
+                </p>
+              </div>
+
+              <div className="mt-4">
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                  Pair CSV
+                </label>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={(event) => {
+                    const next = event.target.files?.[0] ?? null;
+                    setFile(next);
+                    setValidation(null);
+                    setApplyResult(null);
+                    setActiveSourceLabel(next?.name ?? null);
+                  }}
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                />
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  Expected filename format: <span className="font-mono">eng_yor.csv</span>, <span className="font-mono">eng_ibo.csv</span>.
+                </p>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <button
+                  onClick={handleValidate}
+                  disabled={!file || validating}
+                  className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {validating ? 'Validating...' : 'Validate CSV'}
+                </button>
+                {file ? (
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
+                    File: <span className="font-mono">{file.name}</span>
+                  </span>
+                ) : null}
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <button
-                onClick={handleValidate}
-                disabled={!file || validating}
-                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {validating ? 'Validating...' : 'Validate'}
-              </button>
               <button
                 onClick={handleApply}
                 disabled={!canApply}
@@ -219,9 +370,9 @@ export default function DictionaryImportPage() {
               >
                 {applying ? 'Applying...' : 'Apply'}
               </button>
-              {file ? (
+              {activeSourceLabel ? (
                 <span className="text-sm text-gray-600 dark:text-gray-300">
-                  File: <span className="font-mono">{file.name}</span>
+                  Source: <span className="font-mono">{activeSourceLabel}</span>
                 </span>
               ) : null}
             </div>
