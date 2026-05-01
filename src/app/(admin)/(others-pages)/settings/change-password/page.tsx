@@ -144,7 +144,7 @@ export default function ChangePasswordPage() {
           <li>Mix uppercase and lowercase letters</li>
           <li>Include numbers and special characters</li>
           <li>Avoid common words or personal information</li>
-          <li>Don't reuse passwords from other accounts</li>
+          <li>Do not reuse passwords from other accounts</li>
         </ul>
       </div>
     </div>

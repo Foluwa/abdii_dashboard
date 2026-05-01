@@ -1274,8 +1274,10 @@ export default function PhrasesPage() {
         <GoogleSheetsBulkImport
           contentType="phrases"
           onImportComplete={() => fetchPhrases(selectedLanguage, page, alignmentFilter)}
+          defaultLanguageId={selectedLanguage}
+          defaultWorksheetTitle="yo_phrases"
           expectedColumns={[
-            { name: 'language_id', required: true, description: 'UUID of the language', example: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
+            { name: 'source_row_key', required: true, description: 'Stable spreadsheet row key', example: 'phrase_yor_0001' },
             { name: 'phrase', required: true, description: 'The phrase text', example: 'Báwo ni?' },
             { name: 'translation', required: true, description: 'Translation', example: 'How are you?' },
             { name: 'literal_translation', required: false, description: 'Word-by-word translation', example: 'How is it?' },
@@ -1286,6 +1288,7 @@ export default function PhrasesPage() {
             { name: 'usage_context', required: false, description: 'When to use this phrase' },
             { name: 'cultural_notes', required: false, description: 'Cultural context notes' },
             { name: 'is_published', required: false, description: 'Publish state', example: 'true' },
+            { name: 'review_status', required: false, description: 'Editorial review status', example: 'approved' },
           ]}
         />
       )}

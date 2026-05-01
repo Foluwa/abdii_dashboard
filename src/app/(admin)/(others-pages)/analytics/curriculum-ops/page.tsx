@@ -134,8 +134,8 @@ export default function CurriculumOpsPage() {
     return filteredRecentBlockedOrFailed.slice(start, start + recentLimit);
   }, [filteredRecentBlockedOrFailed, recentPage]);
 
-  const metricsRows = metrics?.rows ?? [];
   const filteredMetricsRows = useMemo(() => {
+    const metricsRows = metrics?.rows ?? [];
     const normalizedAction = metricsActionFilter.trim().toLowerCase();
     return metricsRows.filter((row) => {
       const rowResult = (row.result || '').toLowerCase();
@@ -143,7 +143,7 @@ export default function CurriculumOpsPage() {
       if (normalizedAction && !row.action.toLowerCase().includes(normalizedAction)) return false;
       return true;
     });
-  }, [metricsRows, metricsActionFilter, metricsResultFilter]);
+  }, [metrics, metricsActionFilter, metricsResultFilter]);
 
   const metricsTotal = filteredMetricsRows.length;
   const metricsTotalPages = Math.max(1, Math.ceil(metricsTotal / metricsLimit));
@@ -154,6 +154,7 @@ export default function CurriculumOpsPage() {
     return filteredMetricsRows.slice(start, start + metricsLimit);
   }, [filteredMetricsRows, metricsPage]);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setRecentPage(1);
   }, [days, recentActionSearch, recentResultFilter, recentTargetFilter]);
@@ -173,6 +174,7 @@ export default function CurriculumOpsPage() {
       setMetricsPage(metricsTotalPages);
     }
   }, [metricsPage, metricsTotalPages]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const totals = useMemo((): Totals => {
     const rows = metrics?.rows ?? [];

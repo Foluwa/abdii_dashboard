@@ -34,9 +34,16 @@ function PlanDetails({ plan }: { plan: BillingPlan }) {
   );
 }
 
+function browserCountryCode() {
+  if (typeof window === "undefined") return "";
+  const locale = Intl.DateTimeFormat().resolvedOptions().locale || "";
+  const region = locale.split("-").find((part) => /^[A-Za-z]{2}$/.test(part));
+  return region?.toUpperCase() || "";
+}
+
 export default function BillingPlansCard() {
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
-  const defaultCountry = (process.env.NEXT_PUBLIC_BILLING_COUNTRY_CODE || "NG").trim().toUpperCase();
+  const configuredCountry = (process.env.NEXT_PUBLIC_BILLING_COUNTRY_CODE || "").trim().toUpperCase();
 
   const countryOptions = React.useMemo(
     () => [
@@ -52,7 +59,15 @@ export default function BillingPlansCard() {
     []
   );
 
-  const [selectedCountry, setSelectedCountry] = React.useState<string>(defaultCountry || "NG");
+  const [selectedCountry, setSelectedCountry] = React.useState<string>(configuredCountry || "US");
+
+  React.useEffect(() => {
+    if (configuredCountry) return;
+    const detected = browserCountryCode();
+    if (detected) {
+      setSelectedCountry(detected);
+    }
+  }, [configuredCountry]);
   const { plans, isLoading, isError, refresh } = useBillingPlans(selectedCountry || undefined);
   const countrySuffix = selectedCountry ? `?country_code=${encodeURIComponent(selectedCountry)}` : "";
   const plansUrl = `${apiBaseUrl}/api/v1/billing/plans${countrySuffix}`;

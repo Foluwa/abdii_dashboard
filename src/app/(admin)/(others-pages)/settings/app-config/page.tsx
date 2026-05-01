@@ -301,19 +301,19 @@ export default function AppConfigPage() {
           <ul className="list-disc list-inside ml-4 space-y-1">
             <li>
               <code className="px-1 py-0.5 bg-blue-100 dark:bg-blue-900 rounded">
-                strategy: "recommended"
+                strategy: &quot;recommended&quot;
               </code>{" "}
               - Order by lesson → frequency → alphabetical
             </li>
             <li>
               <code className="px-1 py-0.5 bg-blue-100 dark:bg-blue-900 rounded">
-                strategy: "random"
+                strategy: &quot;random&quot;
               </code>{" "}
               - Fully randomized order
             </li>
             <li>
               <code className="px-1 py-0.5 bg-blue-100 dark:bg-blue-900 rounded">
-                strategy: "alphabetical"
+                strategy: &quot;alphabetical&quot;
               </code>{" "}
               - Sort A-Z by word
             </li>

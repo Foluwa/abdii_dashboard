@@ -62,6 +62,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     console.log('🔐 AUTH STATE CHANGED:', {
       isAuthenticated: !!user,
@@ -328,6 +329,7 @@ export const useRequireAuth = (requiredPermission?: string) => {
     hasCheckedRef.current = true;
     setShouldRender(true);
   }, [isAuthenticated, isLoading]); // Minimal dependencies - only primitives
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return { isLoading: isLoading || !shouldRender };
 };

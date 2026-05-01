@@ -7,7 +7,7 @@
  *   contentType="phrases"
  *   onImportComplete={() => refreshData()}
  *   expectedColumns={[
- *     { name: 'language_id', required: true, description: 'UUID of the language' },
+ *     { name: 'source_row_key', required: true, description: 'Stable row key' },
  *     { name: 'phrase', required: true, description: 'The phrase text' },
  *     // ... more columns
  *   ]}
@@ -16,7 +16,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useToast } from '@/contexts/ToastContext';
 import { apiClient } from '@/lib/api';
 
@@ -35,6 +35,7 @@ interface ValidationIssue {
 }
 
 interface ValidationResponse {
+  batch_id?: string;
   valid: boolean;
   total_rows: number;
   valid_rows: number;
@@ -43,11 +44,30 @@ interface ValidationResponse {
   preview: any[];
 }
 
+interface BulkImportBatchItem {
+  id: string;
+  content_type: string;
+  status: string;
+  source_name?: string | null;
+  worksheet_title?: string | null;
+  total_rows: number;
+  valid_rows: number;
+  invalid_rows: number;
+  created_count: number;
+  updated_count: number;
+  failed_count: number;
+  error_count: number;
+  warning_count: number;
+  started_at: string;
+  finished_at?: string | null;
+}
+
 interface Props {
   contentType: string;
   onImportComplete: () => void;
   expectedColumns: ColumnDefinition[];
   defaultLanguageId?: string;
+  defaultWorksheetTitle?: string;
 }
 
 export function GoogleSheetsBulkImport({
@@ -55,10 +75,11 @@ export function GoogleSheetsBulkImport({
   onImportComplete,
   expectedColumns,
   defaultLanguageId,
+  defaultWorksheetTitle,
 }: Props) {
   const toast = useToast();
   const [sheetReference, setSheetReference] = useState('');
-  const [worksheetTitle, setWorksheetTitle] = useState('');
+  const [worksheetTitle, setWorksheetTitle] = useState(defaultWorksheetTitle || '');
   const [headerRow, setHeaderRow] = useState(1);
   const [languageId, setLanguageId] = useState(defaultLanguageId || '');
   
@@ -66,6 +87,36 @@ export function GoogleSheetsBulkImport({
   const [applying, setApplying] = useState(false);
   const [validation, setValidation] = useState<ValidationResponse | null>(null);
   const [showColumnInfo, setShowColumnInfo] = useState(false);
+  const [history, setHistory] = useState<BulkImportBatchItem[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  useEffect(() => {
+    setLanguageId(defaultLanguageId || '');
+  }, [defaultLanguageId]);
+
+  useEffect(() => {
+    setWorksheetTitle(defaultWorksheetTitle || '');
+  }, [defaultWorksheetTitle]);
+
+  const refreshHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const result = await apiClient.get<{ items: BulkImportBatchItem[] }>(
+        `/api/v1/admin/bulk-import/${contentType}/batches`,
+        { params: { limit: 10 } }
+      );
+      setHistory(result.data.items ?? []);
+    } catch {
+      setHistory([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contentType]);
 
   const handleValidate = async () => {
     const trimmedReference = sheetReference.trim();
@@ -102,6 +153,7 @@ export function GoogleSheetsBulkImport({
       } else {
         toast.error(`Validation failed. ${result.data.invalid_rows} rows have errors.`);
       }
+      await refreshHistory();
     } catch (error: any) {
       toast.error(error?.response?.data?.detail ?? error?.message ?? 'Validation failed');
       setValidation(null);
@@ -134,10 +186,13 @@ export function GoogleSheetsBulkImport({
         },
         { timeout: 300000 }
       );
-      toast.success(`Import complete! ${result.data.created_count} ${contentType} created.`);
+      const created = result.data.created_count ?? 0;
+      const updated = result.data.updated_count ?? 0;
+      toast.success(`Import complete! ${created} created, ${updated} updated.`);
       setValidation(null);
       setSheetReference('');
-      setWorksheetTitle('');
+      setWorksheetTitle(defaultWorksheetTitle || '');
+      await refreshHistory();
       onImportComplete();
     } catch (error: any) {
       toast.error(error?.response?.data?.detail ?? error?.message ?? 'Import failed');
@@ -259,6 +314,11 @@ export function GoogleSheetsBulkImport({
               Validation Results
             </h3>
             <div className="flex gap-3 text-sm">
+              {validation.batch_id && (
+                <span className="font-mono text-gray-500 dark:text-gray-400">
+                  {validation.batch_id.slice(0, 8)}
+                </span>
+              )}
               <span className="text-green-600 dark:text-green-400">
                 ✓ {validation.valid_rows} valid
               </span>
@@ -333,6 +393,56 @@ export function GoogleSheetsBulkImport({
           )}
         </div>
       )}
+
+      <div className="mt-6">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Batch History</h3>
+          <button
+            type="button"
+            onClick={() => void refreshHistory()}
+            disabled={loadingHistory}
+            className="text-sm text-blue-600 hover:underline disabled:opacity-60 dark:text-blue-400"
+          >
+            {loadingHistory ? 'Refreshing...' : 'Refresh'}
+          </button>
+        </div>
+        <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-50 dark:bg-gray-900/40">
+              <tr>
+                <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Status</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Worksheet</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Rows</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Created / Updated</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Issues</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Finished</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              {history.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-4 text-gray-600 dark:text-gray-300">
+                    No import batches found for this content type.
+                  </td>
+                </tr>
+              ) : (
+                history.map((batch) => (
+                  <tr key={batch.id}>
+                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{batch.status}</td>
+                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{batch.worksheet_title || batch.source_name || '-'}</td>
+                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{batch.valid_rows}/{batch.total_rows}</td>
+                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{batch.created_count} / {batch.updated_count}</td>
+                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{batch.error_count} errors, {batch.warning_count} warnings</td>
+                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
+                      {batch.finished_at ? new Date(batch.finished_at).toLocaleString() : '-'}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

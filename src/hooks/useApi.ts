@@ -303,28 +303,6 @@ export function useLanguages() {
 }
 
 /**
- * Lessons Hook
- */
-export function useLessons(filters?: { language_id?: number; status?: string; page?: number; limit?: number }) {
-  const params = new URLSearchParams();
-  if (filters?.language_id) params.append('language_id', filters.language_id.toString());
-  if (filters?.status) params.append('status', filters.status);
-  if (filters?.page) params.append('page', filters.page.toString());
-  if (filters?.limit) params.append('limit', filters.limit.toString());
-
-  const url = `/api/v1/admin/lessons?${params.toString()}`;
-  const { data, error, mutate } = useSWR(url, fetcher);
-
-  return {
-    lessons: data?.lessons || [],
-    total: data?.total || 0,
-    isLoading: !error && !data,
-    isError: error,
-    refresh: mutate,
-  };
-}
-
-/**
  * Curriculum / Blueprint (Admin) Hooks
  */
 export function useAdminBlueprint(blueprintId: string | null) {

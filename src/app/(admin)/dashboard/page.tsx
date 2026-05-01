@@ -104,7 +104,7 @@ export default function Dashboard() {
           isLoading={statsLoading}
         />
         <StatCard
-          label="Total Lessons"
+          label="Lesson Blueprints"
           value={stats?.total_lessons?.toLocaleString() ?? '0'}
           icon={<ListIcon />}
           isLoading={statsLoading}
@@ -124,32 +124,32 @@ export default function Dashboard() {
         </h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Link
-            href="/community/users"
+            href="/content/library/words"
             className="p-4 text-center transition-colors border border-gray-200 rounded-lg hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800"
           >
-            <UserCircleIcon className="w-8 h-8 mx-auto mb-2 text-brand-600 dark:text-brand-400" />
-            <p className="text-sm font-medium text-gray-900 dark:text-white">Manage Users</p>
+            <GridIcon className="w-8 h-8 mx-auto mb-2 text-brand-600 dark:text-brand-400" />
+            <p className="text-sm font-medium text-gray-900 dark:text-white">Words Import</p>
           </Link>
           <Link
-            href="/curriculum/lessons"
+            href="/curriculum/lesson-blueprints"
             className="p-4 text-center transition-colors border border-gray-200 rounded-lg hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800"
           >
             <ListIcon className="w-8 h-8 mx-auto mb-2 text-brand-600 dark:text-brand-400" />
-            <p className="text-sm font-medium text-gray-900 dark:text-white">Manage Lessons</p>
+            <p className="text-sm font-medium text-gray-900 dark:text-white">Lesson Blueprints</p>
           </Link>
           <Link
-            href="/operations/configuration/platform"
+            href="/media/audio/jobs"
             className="p-4 text-center transition-colors border border-gray-200 rounded-lg hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800"
           >
             <GridIcon className="w-8 h-8 mx-auto mb-2 text-brand-600 dark:text-brand-400" />
-            <p className="text-sm font-medium text-gray-900 dark:text-white">Configuration</p>
+            <p className="text-sm font-medium text-gray-900 dark:text-white">Audio Jobs</p>
           </Link>
           <Link
-            href="/operations/alerts"
+            href="/media/orphan-assets"
             className="p-4 text-center transition-colors border border-gray-200 rounded-lg hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800"
           >
             <GridIcon className="w-8 h-8 mx-auto mb-2 text-brand-600 dark:text-brand-400" />
-            <p className="text-sm font-medium text-gray-900 dark:text-white">Alert History</p>
+            <p className="text-sm font-medium text-gray-900 dark:text-white">Orphan Assets</p>
           </Link>
         </div>
       </div>

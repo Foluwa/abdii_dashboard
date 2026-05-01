@@ -13,7 +13,7 @@ import { Modal } from "@/components/ui/modal";
 import { ConfirmationModal } from "@/components/ui/modal/ConfirmationModal";
 import { RegenerateAudioModal } from "@/components/modals/RegenerateAudioModal";
 import WordDetailModal from "@/components/admin/words/WordDetailModal";
-import { GoogleSheetsBulkImport } from "@/components/admin/GoogleSheetsBulkImport";
+import { DictionaryGoogleSheetsBulkImport } from "@/components/admin/DictionaryGoogleSheetsBulkImport";
 import { scheduleQueuedAudioRefresh } from "@/lib/audioRegeneration";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import Pagination from "@/components/tables/Pagination";
@@ -531,27 +531,7 @@ export default function WordsPage() {
         </div>
       </div>
 
-      {/* Bulk Import from Google Sheets */}
-      {selectedLanguage && (
-        <GoogleSheetsBulkImport
-          contentType="dictionary"
-          onImportComplete={() => refresh()}
-          expectedColumns={[
-            { name: 'language_id', required: true, description: 'UUID of the language', example: '6e76e0ee-3df1-41d1-9548-ac3fed67a77b' },
-            { name: 'lemma', required: true, description: 'The word/headword', example: 'ọmọ' },
-            { name: 'part_of_speech', required: true, description: 'Part of speech', example: 'noun' },
-            { name: 'gloss_text', required: true, description: 'Primary meaning/translation', example: 'child' },
-            { name: 'meaning_hint', required: false, description: 'Additional meaning context', example: 'offspring' },
-            { name: 'example_sentence', required: false, description: 'Example usage', example: 'Ọmọ mi ni' },
-            { name: 'example_translation', required: false, description: 'Example translation', example: 'It is my child' },
-            { name: 'cultural_notes', required: false, description: 'Cultural context', example: '' },
-            { name: 'etymology', required: false, description: 'Word origin', example: '' },
-            { name: 'tags', required: false, description: 'Comma-separated tags', example: 'family,basic' },
-            { name: 'review_status', required: false, description: 'Review status', example: 'approved' },
-            { name: 'source_row_key', required: false, description: 'Source reference', example: '' },
-          ]}
-        />
-      )}
+      <DictionaryGoogleSheetsBulkImport onImportComplete={() => refresh()} />
 
       {/* Filters Card */}
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">

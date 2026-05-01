@@ -382,8 +382,10 @@ export default function SentencesPage() {
         <GoogleSheetsBulkImport
           contentType="sentences"
           onImportComplete={() => fetchSentences()}
+          defaultLanguageId={filters.language_id}
+          defaultWorksheetTitle="yo_sentences"
           expectedColumns={[
-            { name: 'language_id', required: true, description: 'UUID of the language', example: '6e76e0ee-3df1-41d1-9548-ac3fed67a77b' },
+            { name: 'source_row_key', required: true, description: 'Stable spreadsheet row key', example: 'sentence_yor_0001' },
             { name: 'text', required: true, description: 'Sentence text', example: 'Mo fẹ́ràn oúnjẹ Yorùbá' },
             { name: 'translation', required: true, description: 'Translation', example: 'I love Yoruba food' },
             { name: 'romanization', required: false, description: 'Romanized version', example: 'mo feran ounje Yoruba' },
@@ -393,6 +395,7 @@ export default function SentencesPage() {
             { name: 'usage_context', required: false, description: 'Usage context', example: 'Casual conversation' },
             { name: 'cultural_notes', required: false, description: 'Cultural context', example: '' },
             { name: 'is_published', required: false, description: 'Published status', example: 'false' },
+            { name: 'review_status', required: false, description: 'Editorial review status', example: 'approved' },
           ]}
         />
       )}

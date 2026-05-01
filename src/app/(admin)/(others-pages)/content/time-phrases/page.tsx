@@ -13,6 +13,8 @@ import { AudioWaveform } from "@/components/ui/audio/AudioWaveform";
 import { RegenerateAudioModal } from "@/components/modals/RegenerateAudioModal";
 import { GoogleSheetsBulkImport } from "@/components/admin/GoogleSheetsBulkImport";
 import { scheduleQueuedAudioRefresh } from "@/lib/audioRegeneration";
+import { createTimePhraseJob, type AdminJob } from "@/lib/adminJobsApi";
+import { useAdminJob } from "@/hooks/useAdminJob";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import Pagination from "@/components/tables/Pagination";
 import { FiClock, FiTrash2, FiEdit2, FiVolume2, FiFilter, FiX, FiChevronDown, FiChevronUp, FiCheckSquare, FiSquare } from "react-icons/fi";
@@ -284,6 +286,9 @@ export default function TimePhrasesPage() {
   // Bulk operations
   const [selectedPhrases, setSelectedPhrases] = useState<string[]>([]);
   const [isBulkRegenerating, setIsBulkRegenerating] = useState(false);
+  const [timePhraseAdminJob, setTimePhraseAdminJob] = useState<AdminJob | null>(null);
+  const [timePhraseJobLoading, setTimePhraseJobLoading] = useState(false);
+  const [timePhraseApplyConfirm, setTimePhraseApplyConfirm] = useState<"audio" | "alignment" | null>(null);
   const [showRegenerateModal, setShowRegenerateModal] = useState(false);
   const [regeneratingPhrase, setRegeneratingPhrase] = useState<TimePhrase | null>(null);
   const [alignmentRecord, setAlignmentRecord] = useState<PhraseAlignment | null>(null);
@@ -312,6 +317,9 @@ export default function TimePhrasesPage() {
     is_published: false,
     audio_url: "",
   });
+
+  const trackedTimePhraseAdminJob = useAdminJob(timePhraseAdminJob?.id);
+  const currentTimePhraseAdminJob = trackedTimePhraseAdminJob.job ?? timePhraseAdminJob;
 
   // Initialize filters from URL params
   useEffect(() => {
@@ -1165,6 +1173,27 @@ export default function TimePhrasesPage() {
     setShowRegenerateModal(true);
   };
 
+  const queueTimePhraseAdminJob = async (
+    jobType: "audio" | "alignment" | "readiness",
+    dryRun: boolean,
+  ) => {
+    setTimePhraseJobLoading(true);
+    try {
+      const job = await createTimePhraseJob({
+        job_type: jobType,
+        dry_run: dryRun,
+        limit,
+      });
+      setTimePhraseAdminJob(job);
+      toast.success(dryRun ? `${jobType} preview queued` : `${jobType} job queued`);
+    } catch (error: any) {
+      toast.error(formatErrorMessage(error, `Failed to queue ${jobType} job`));
+    } finally {
+      setTimePhraseJobLoading(false);
+      setTimePhraseApplyConfirm(null);
+    }
+  };
+
   return (
     <div className="p-6">
       <PageBreadCrumb pageTitle="Time Phrases" />
@@ -1214,17 +1243,90 @@ export default function TimePhrasesPage() {
         <GoogleSheetsBulkImport
           contentType="phrases"
           onImportComplete={() => fetchTimePhrases()}
+          defaultLanguageId={selectedLanguage}
+          defaultWorksheetTitle="yo_time"
           expectedColumns={[
-            { name: 'language_id', required: true, description: 'UUID of the language', example: '6e76e0ee-3df1-41d1-9548-ac3fed67a77b' },
-            { name: 'phrase', required: true, description: 'Yoruba time phrase', example: 'Aago mejila òru' },
-            { name: 'translation', required: true, description: 'English time', example: '12:00 AM' },
+            { name: 'source_row_key', required: true, description: 'Stable spreadsheet row key', example: 'time_yor_0001' },
             { name: 'time_24h', required: false, description: '24-hour format (metadata)', example: '00:00' },
             { name: 'time_12h', required: false, description: '12-hour format (metadata)', example: '12:00 AM' },
+            { name: 'phrase', required: true, description: 'Yoruba time phrase', example: 'Aago mejila òru' },
+            { name: 'translation', required: true, description: 'English time', example: '12:00 AM' },
             { name: 'category', required: false, description: 'Category (should be "time")', example: 'time' },
             { name: 'difficulty_level', required: false, description: 'Difficulty 1-5', example: '2' },
             { name: 'is_published', required: false, description: 'Published status', example: 'false' },
+            { name: 'review_status', required: false, description: 'Editorial review status', example: 'approved' },
           ]}
         />
+      )}
+
+      {selectedLanguage && (
+        <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/[0.03]">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                Time Phrase Jobs
+              </h2>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                Preview readiness, queue missing audio, or queue alignment jobs through the admin job system.
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {([
+                ["readiness", "Readiness"],
+                ["audio", "Audio"],
+                ["alignment", "Alignment"],
+              ] as Array<["readiness" | "audio" | "alignment", string]>).map(([jobType, label]) => (
+                <div key={jobType} className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void queueTimePhraseAdminJob(jobType, true)}
+                    disabled={timePhraseJobLoading}
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 disabled:opacity-60 dark:border-gray-700 dark:text-gray-200"
+                  >
+                    {label} Preview
+                  </button>
+                  {jobType !== "readiness" ? (
+                    <button
+                      type="button"
+                      onClick={() => setTimePhraseApplyConfirm(jobType)}
+                      disabled={timePhraseJobLoading}
+                      className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+                    >
+                      Apply
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {currentTimePhraseAdminJob ? (
+            <div className="mt-4 rounded-lg bg-gray-50 p-3 text-sm text-gray-700 dark:bg-gray-900 dark:text-gray-300">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="font-mono text-xs">{currentTimePhraseAdminJob.id.slice(0, 8)}</span>
+                <span className="font-medium">{currentTimePhraseAdminJob.status}</span>
+                <span>{currentTimePhraseAdminJob.payload.job_type as string}</span>
+                <span>{Math.round(currentTimePhraseAdminJob.progress.percent)}%</span>
+                {currentTimePhraseAdminJob.error ? <span className="text-red-600 dark:text-red-300">{currentTimePhraseAdminJob.error}</span> : null}
+              </div>
+              {currentTimePhraseAdminJob.result ? (
+                <div className="mt-2 grid gap-2 sm:grid-cols-4">
+                  {([
+                    ["Candidates", currentTimePhraseAdminJob.result.candidate_count ?? 0],
+                    ["Queued", currentTimePhraseAdminJob.result.queued_count ?? 0],
+                    ["Skipped", currentTimePhraseAdminJob.result.skipped ?? 0],
+                    ["Failed", currentTimePhraseAdminJob.result.failed ?? 0],
+                  ] as Array<[string, unknown]>).map(([label, value]) => (
+                    <div key={label} className="rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-800 dark:bg-gray-950">
+                      <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">{label}</div>
+                      <div className="mt-1 font-semibold text-gray-900 dark:text-white">{String(value)}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       )}
 
       {selectedLanguage && (
@@ -2015,6 +2117,21 @@ export default function TimePhrasesPage() {
           variant="danger"
         />
       )}
+
+      <ConfirmationModal
+        isOpen={Boolean(timePhraseApplyConfirm)}
+        onClose={() => setTimePhraseApplyConfirm(null)}
+        onConfirm={() => {
+          if (timePhraseApplyConfirm) {
+            void queueTimePhraseAdminJob(timePhraseApplyConfirm, false);
+          }
+        }}
+        title="Apply Time Phrase Job"
+        message="This will modify data. Proceed? Audio apply queues TTS jobs. Alignment apply queues alignment jobs."
+        confirmText="Apply"
+        variant="warning"
+        isLoading={timePhraseJobLoading}
+      />
 
       {/* Regenerate Audio Modal */}
       {showRegenerateModal && regeneratingPhrase && (

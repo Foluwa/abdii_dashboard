@@ -1,14 +1,14 @@
 import SectionHub from "@/components/admin/navigation/SectionHub";
 
 const operationsLinks = [
-  { label: "Status", href: "/operations/status" },
-  { label: "Metrics", href: "/operations/metrics" },
-  { label: "Alerts", href: "/operations/alerts" },
-  { label: "Cron Jobs", href: "/operations/cron-jobs" },
-  { label: "Idempotency", href: "/operations/idempotency" },
-  { label: "Configuration", href: "/operations/configuration" },
-  { label: "Audit Log", href: "/operations/audit-log" },
-  { label: "Testing", href: "/operations/testing" },
+  { label: "Status", href: "/system/observability/status" },
+  { label: "Metrics", href: "/system/observability/metrics" },
+  { label: "Alerts", href: "/system/observability/alerts" },
+  { label: "Cron Jobs", href: "/system/observability/cron-jobs" },
+  { label: "ML Training", href: "/system/ml-training" },
+  { label: "Configuration", href: "/system/configuration/platform" },
+  { label: "Audit Log", href: "/system/audit-log" },
+  { label: "Testing", href: "/system/testing" },
 ];
 
 export default function OperationsHubPage() {

@@ -10,6 +10,7 @@ import Alert from "@/components/ui/alert/Alert";
 import { StyledSelect } from "@/components/ui/form/StyledSelect";
 import { ConfirmationModal } from "@/components/ui/modal/ConfirmationModal";
 import { AudioWaveform } from "@/components/ui/audio/AudioWaveform";
+import { GoogleSheetsBulkImport } from "@/components/admin/GoogleSheetsBulkImport";
 
 interface Letter {
   id: string;
@@ -250,6 +251,23 @@ export default function LettersPage() {
           fullWidth
         />
       </div>
+
+      {selectedLanguage && (
+        <GoogleSheetsBulkImport
+          contentType="letters"
+          onImportComplete={() => fetchLetters(selectedLanguage)}
+          defaultLanguageId={selectedLanguage}
+          defaultWorksheetTitle="yo_letters"
+          expectedColumns={[
+            { name: "source_row_key", required: true, description: "Stable spreadsheet row key", example: "letter_yor_001" },
+            { name: "glyph", required: true, description: "Letter or digraph", example: "Ẹ" },
+            { name: "display_name", required: true, description: "Display name", example: "Ẹ" },
+            { name: "is_digraph", required: false, description: "TRUE for multi-character letters", example: "FALSE" },
+            { name: "order_index", required: true, description: "Sort order", example: "7" },
+            { name: "review_status", required: false, description: "Editorial review status", example: "approved" },
+          ]}
+        />
+      )}
 
       {/* Letters Grid */}
       {loading && (

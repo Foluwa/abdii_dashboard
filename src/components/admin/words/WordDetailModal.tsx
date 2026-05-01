@@ -655,7 +655,7 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
 
               {wordDetail.examples.length === 0 ? (
                 <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-                  No examples yet. Click "Generate Examples" to create some.
+                  No examples yet. Click &quot;Generate Examples&quot; to create some.
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -856,7 +856,7 @@ export default function WordDetailModal({ wordId, onClose, onUpdate }: WordDetai
 
                   {(wordDetail.audio_files?.length ?? 0) === 0 ? (
                     <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-                      No audio files available. Click "Regenerate Audio" to create audio for this word.
+                      No audio files available. Click &quot;Regenerate Audio&quot; to create audio for this word.
                     </div>
                   ) : (
                     <div className="space-y-3">

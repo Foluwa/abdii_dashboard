@@ -17,6 +17,8 @@ import Pagination from "@/components/tables/Pagination";
 import { GoogleSheetsBulkImport } from "@/components/admin/GoogleSheetsBulkImport";
 import { RegenerateAudioModal } from "@/components/modals/RegenerateAudioModal";
 import { scheduleQueuedAudioRefresh } from "@/lib/audioRegeneration";
+import { createProverbCleanupJob, type AdminJob } from "@/lib/adminJobsApi";
+import { useAdminJob } from "@/hooks/useAdminJob";
 
 type AlignmentStatus = "draft" | "reviewed" | "approved" | "stale";
 
@@ -283,6 +285,9 @@ export default function ProverbsPage() {
   const [bulkRegenerateVoiceId, setBulkRegenerateVoiceId] = useState<string>("");
   const [availableVoices, setAvailableVoices] = useState<any[]>([]);
   const [isLoadingVoices, setIsLoadingVoices] = useState(false);
+  const [proverbCleanupJob, setProverbCleanupJob] = useState<AdminJob | null>(null);
+  const [proverbCleanupLoading, setProverbCleanupLoading] = useState(false);
+  const [showProverbCleanupApplyConfirm, setShowProverbCleanupApplyConfirm] = useState(false);
   const [alignmentRecord, setAlignmentRecord] = useState<ProverbAlignment | null>(null);
   const [alignmentStatus, setAlignmentStatus] = useState<AlignmentStatus>("draft");
   const [alignmentPrimarySegment, setAlignmentPrimarySegment] = useState<ProverbAlignmentSegment>(createDefaultAlignmentSegment());
@@ -1214,6 +1219,23 @@ export default function ProverbsPage() {
     setShowBulkRegenerateConfirm(true);
   };
 
+  const trackedProverbCleanupJob = useAdminJob(proverbCleanupJob?.id);
+  const currentProverbCleanupJob = trackedProverbCleanupJob.job ?? proverbCleanupJob;
+
+  const queueProverbCleanupJob = async (dryRun: boolean) => {
+    setProverbCleanupLoading(true);
+    try {
+      const job = await createProverbCleanupJob({ dry_run: dryRun });
+      setProverbCleanupJob(job);
+      setSuccessMessage(dryRun ? "Proverb cleanup preview queued." : "Proverb cleanup apply queued.");
+    } catch (error: any) {
+      setErrorMessage(error?.response?.data?.detail ?? error?.message ?? "Failed to queue proverb cleanup job.");
+    } finally {
+      setProverbCleanupLoading(false);
+      setShowProverbCleanupApplyConfirm(false);
+    }
+  };
+
   const confirmBulkRegenerateAudio = async () => {
     setIsBulkRegenerating(true);
     try {
@@ -1288,6 +1310,65 @@ export default function ProverbsPage() {
         </div>
       </div>
 
+      <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/20 dark:bg-amber-500/10">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-100">
+              Old Audio Format Cleanup
+            </h2>
+            <p className="mt-1 text-sm text-amber-900/80 dark:text-amber-100/80">
+              Preview or remove old proverb audio database rows. Apply creates a backup table and does not delete R2 objects.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void queueProverbCleanupJob(true)}
+              disabled={proverbCleanupLoading}
+              className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-900 disabled:opacity-60 dark:border-amber-500/30 dark:bg-gray-900 dark:text-amber-100"
+            >
+              Preview
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowProverbCleanupApplyConfirm(true)}
+              disabled={proverbCleanupLoading}
+              className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+        {currentProverbCleanupJob ? (
+          <div className="mt-4 rounded-lg bg-white p-3 text-sm text-gray-700 dark:bg-gray-900 dark:text-gray-300">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="font-mono text-xs">{currentProverbCleanupJob.id.slice(0, 8)}</span>
+              <span className="font-medium">{currentProverbCleanupJob.status}</span>
+              <span>{Math.round(currentProverbCleanupJob.progress.percent)}%</span>
+              {currentProverbCleanupJob.error ? <span className="text-red-600 dark:text-red-300">{currentProverbCleanupJob.error}</span> : null}
+            </div>
+            {currentProverbCleanupJob.result ? (
+              <div className="mt-2 grid gap-2 sm:grid-cols-4">
+                {([
+                  ["Affected", currentProverbCleanupJob.result.candidate_count ?? 0],
+                  ["Backed up", currentProverbCleanupJob.result.backup_count ?? "-"],
+                  ["Deleted", currentProverbCleanupJob.result.deleted_count ?? "-"],
+                  ["R2", currentProverbCleanupJob.result.r2_cleanup ?? "not_run"],
+                ] as Array<[string, unknown]>).map(([label, value]) => (
+                  <div key={label} className="rounded-lg border border-gray-200 p-2 dark:border-gray-800">
+                    <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">{label}</div>
+                    <div className="mt-1 font-semibold text-gray-900 dark:text-white">{String(value)}</div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <div className="mt-2 text-xs text-amber-700 dark:text-amber-200">
+              R2 object deletion is not handled by this dashboard action.
+            </div>
+          </div>
+        ) : null}
+      </div>
+
       {/* Filters */}
       <div className="mb-6 grid gap-4 max-w-full md:grid-cols-2 lg:grid-cols-4">
         <div>
@@ -1356,8 +1437,9 @@ export default function ProverbsPage() {
           <GoogleSheetsBulkImport
             contentType="proverbs"
             onImportComplete={() => refresh()}
+            defaultWorksheetTitle="yo_proverbs"
             expectedColumns={[
-              { name: 'language_id', required: true, description: 'UUID of the language', example: '6e76e0ee-3df1-41d1-9548-ac3fed67a77b' },
+              { name: 'source_row_key', required: true, description: 'Stable spreadsheet row key', example: 'proverb_yor_0001' },
               { name: 'yoruba_text', required: true, description: 'Proverb in Yoruba', example: 'Ìwà l\'ẹ̀so ẹni' },
               { name: 'english_translation', required: true, description: 'Direct translation', example: 'Character is one\'s beauty' },
               { name: 'english_meaning', required: false, description: 'Interpretation/meaning', example: 'Good character is more important than physical appearance' },
@@ -1367,6 +1449,7 @@ export default function ProverbsPage() {
               { name: 'tags', required: false, description: 'Comma-separated tags', example: 'wisdom,values' },
               { name: 'cultural_context', required: false, description: 'Cultural context', example: 'Used to emphasize inner beauty' },
               { name: 'is_published', required: false, description: 'Published status', example: 'false' },
+              { name: 'review_status', required: false, description: 'Editorial review status', example: 'approved' },
             ]}
           />
         </div>
@@ -2032,6 +2115,18 @@ export default function ProverbsPage() {
         confirmText="Delete"
         cancelText="Cancel"
         variant="danger"
+      />
+
+      <ConfirmationModal
+        isOpen={showProverbCleanupApplyConfirm}
+        onClose={() => setShowProverbCleanupApplyConfirm(false)}
+        onConfirm={() => void queueProverbCleanupJob(false)}
+        title="Apply Proverb Cleanup"
+        message="This will modify data. Proceed? Old-format proverb audio rows will be backed up and deleted from the database. R2 objects will not be deleted."
+        confirmText="Apply Cleanup"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={proverbCleanupLoading}
       />
 
       {/* Bulk Regenerate Audio Modal */}

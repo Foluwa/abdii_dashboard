@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useLanguages } from "@/hooks/useApi";
 import { apiClient } from "@/lib/api";
 import type { Language } from "@/types/api";
@@ -19,6 +19,12 @@ export default function LanguagesPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
 
+  const closeModal = useCallback(() => {
+    setShowModal(false);
+    setEditingLanguage(null);
+    setErrorMessage("");
+  }, []);
+
   useEffect(() => {
     if (!showModal) return;
     const previousOverflow = document.body.style.overflow;
@@ -26,7 +32,7 @@ export default function LanguagesPage() {
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [showModal]);
+  }, [showModal, closeModal]);
 
   useEffect(() => {
     if (!showModal) return;
@@ -70,12 +76,6 @@ export default function LanguagesPage() {
       is_deleted: language.is_deleted ?? false,
     });
     setShowModal(true);
-  };
-
-  const closeModal = () => {
-    setShowModal(false);
-    setEditingLanguage(null);
-    setErrorMessage("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

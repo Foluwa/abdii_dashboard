@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import StatusBadge from '@/components/admin/StatusBadge';
 import PageBreadCrumb from '@/components/common/PageBreadCrumb';
@@ -85,8 +85,11 @@ export default function OrphanAssetsPage() {
     min_size_bytes: minSize ? Number(minSize) : undefined,
     q: search || undefined,
   });
+  const refreshSummary = summary.refresh;
+  const refreshScans = scans.refresh;
+  const refreshCandidates = candidates.refresh;
 
-  const candidateItems = candidates.data?.items ?? [];
+  const candidateItems = useMemo(() => candidates.data?.items ?? [], [candidates.data?.items]);
   const totalCandidates = candidates.data?.total ?? 0;
   const totalPages = candidates.data?.pages ?? Math.max(1, Math.ceil(totalCandidates / limit));
   const pageStart = totalCandidates === 0 ? 0 : (page - 1) * limit + 1;
@@ -108,13 +111,13 @@ export default function OrphanAssetsPage() {
 
   const prefixOptions = useMemo(() => summary.data?.settings.managed_prefixes ?? [], [summary.data]);
 
-  const refreshAll = async () => {
+  const refreshAll = useCallback(async () => {
     await Promise.all([
-      summary.refresh(),
-      scans.refresh(),
-      candidates.refresh(),
+      refreshSummary(),
+      refreshScans(),
+      refreshCandidates(),
     ]);
-  };
+  }, [refreshCandidates, refreshScans, refreshSummary]);
 
   useEffect(() => {
     if (!activeScan) return undefined;
@@ -124,7 +127,7 @@ export default function OrphanAssetsPage() {
     }, 4000);
 
     return () => window.clearTimeout(timer);
-  }, [activeScan, summary.refresh, scans.refresh, candidates.refresh]);
+  }, [activeScan, refreshAll]);
 
   const handleRunScan = async (mode: 'dry_run' | 'active') => {
     setIsSubmittingScan(true);

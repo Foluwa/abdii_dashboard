@@ -114,8 +114,8 @@ export default function PlayerAnalyticsPage() {
   };
 
   const tabs = [
-    { name: 'Overview', href: '/overview/analytics', active: false },
-    { name: 'Players', href: '/overview/analytics/players', active: true },
+    { name: 'Overview', href: '/reports/game-analytics', active: false },
+    { name: 'Players', href: '/reports/player-analytics', active: true },
   ];
 
   if (isError) {
@@ -389,7 +389,7 @@ export default function PlayerAnalyticsPage() {
         <div className="space-y-6">
           {/* Back Button */}
           <button
-            onClick={() => router.push('/overview/analytics/players')}
+            onClick={() => router.push('/reports/player-analytics')}
             className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-2"
           >
             ← Back to Leaderboard

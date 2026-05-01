@@ -20,17 +20,19 @@ jest.mock('next/navigation', () => ({
 // Mock next/link
 jest.mock('next/link', () => {
   const React = require('react');
-  return ({ children, href }: { children: ReactNode; href: string }) => {
+  function MockNextLink({ children, href }: { children: ReactNode; href: string }) {
     return React.createElement('a', { href }, children);
-  };
+  }
+  return MockNextLink;
 });
 
 // Mock next/image
 jest.mock('next/image', () => {
   const React = require('react');
-  return ({ alt, ...props }: { alt?: string } & Record<string, unknown>) => {
+  function MockNextImage({ alt, ...props }: { alt?: string } & Record<string, unknown>) {
     return React.createElement('img', { alt: alt ?? '', ...props });
-  };
+  }
+  return MockNextImage;
 });
 
 // Mock SWR
