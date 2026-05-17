@@ -10,6 +10,7 @@
 
 import useSWR from 'swr';
 import { apiClient } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import type { UserRole } from '@/types/auth';
 import type {
   CourseAdminListResponse,
@@ -59,6 +60,12 @@ import {
  */
 const fetcher = (url: string) => apiClient.get(url).then((res) => res.data);
 
+function useAdminApiEnabled() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const hasToken = typeof window !== 'undefined' && !!window.sessionStorage.getItem('access_token');
+  return !isLoading && (isAuthenticated || hasToken);
+}
+
 /**
  * Billing Plans Hook
  */
@@ -91,8 +98,9 @@ export function useBillingPlans(countryCode?: string) {
  * Auto-refreshes every 60 seconds
  */
 export function useSystemStatus() {
+  const enabled = useAdminApiEnabled();
   const { data, error, mutate } = useSWR<SystemStatus>(
-    '/api/v1/admin/status',
+    enabled ? '/api/v1/admin/status' : null,
     fetcher,
     {
       refreshInterval: 0, // Disabled auto-refresh - only refresh on user action
@@ -115,8 +123,9 @@ export function useSystemStatus() {
  * System Stats Hook
  */
 export function useSystemStats() {
+  const enabled = useAdminApiEnabled();
   const { data, error, mutate } = useSWR<SystemStats>(
-    '/api/v1/admin/stats',
+    enabled ? '/api/v1/admin/stats' : null,
     fetcher,
     {
       refreshInterval: 0, // Disabled auto-refresh - only refresh on user action
@@ -957,8 +966,9 @@ export function useGames(filters?: { language_id?: number; game_type?: string; p
  * Returns users grouped by actual device platform (iOS/Android/unknown)
  */
 export function usePlatformDistribution() {
+  const enabled = useAdminApiEnabled();
   const { data, error, mutate } = useSWR(
-    '/api/v1/devices/admin/platform-distribution',
+    enabled ? '/api/v1/devices/admin/platform-distribution' : null,
     fetcher,
     { revalidateOnFocus: false }
   );
@@ -987,8 +997,9 @@ export function usePlatformDistribution() {
  * Returns new user registrations per month
  */
 export function useMonthlyUserGrowth(months: number = 12) {
+  const enabled = useAdminApiEnabled();
   const { data, error, mutate } = useSWR(
-    `/api/v1/admin/analytics/monthly-user-growth?months=${months}`,
+    enabled ? `/api/v1/admin/analytics/monthly-user-growth?months=${months}` : null,
     fetcher,
     { revalidateOnFocus: false }
   );
@@ -1015,8 +1026,9 @@ export function useMonthlyUserGrowth(months: number = 12) {
  * Returns new subscribers per month (first-time only)
  */
 export function useMonthlySubscriberGrowth(months: number = 12) {
+  const enabled = useAdminApiEnabled();
   const { data, error, mutate } = useSWR(
-    `/api/v1/admin/analytics/monthly-subscriber-growth?months=${months}`,
+    enabled ? `/api/v1/admin/analytics/monthly-subscriber-growth?months=${months}` : null,
     fetcher,
     { revalidateOnFocus: false }
   );
@@ -1043,8 +1055,9 @@ export function useMonthlySubscriberGrowth(months: number = 12) {
  * Returns all users grouped by users.country_code
  */
 export function useGeoDistributionLastKnown(includeUnknown: boolean = true) {
+  const enabled = useAdminApiEnabled();
   const { data, error, mutate } = useSWR(
-    `/api/v1/admin/analytics/geo/last-known?include_unknown=${includeUnknown}`,
+    enabled ? `/api/v1/admin/analytics/geo/last-known?include_unknown=${includeUnknown}` : null,
     fetcher,
     { revalidateOnFocus: false }
   );
@@ -1066,8 +1079,9 @@ export function useGeoDistributionActiveUsers(
   windowDays: number = 30,
   includeUnknown: boolean = true
 ) {
+  const enabled = useAdminApiEnabled();
   const { data, error, mutate } = useSWR(
-    `/api/v1/admin/analytics/geo/active?window_days=${windowDays}&include_unknown=${includeUnknown}`,
+    enabled ? `/api/v1/admin/analytics/geo/active?window_days=${windowDays}&include_unknown=${includeUnknown}` : null,
     fetcher,
     { revalidateOnFocus: false }
   );
@@ -1086,8 +1100,9 @@ export function useGeoDistributionActiveUsers(
  * Unified feed from admin_audit_log + subscription_events.
  */
 export function useRecentActivity(limit: number = 10, days: number = 30) {
+  const enabled = useAdminApiEnabled();
   const { data, error, mutate } = useSWR(
-    `/api/v1/admin/analytics/recent-activity?limit=${limit}&days=${days}`,
+    enabled ? `/api/v1/admin/analytics/recent-activity?limit=${limit}&days=${days}` : null,
     fetcher,
     { revalidateOnFocus: false }
   );

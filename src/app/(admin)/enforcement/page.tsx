@@ -61,35 +61,22 @@ interface EnforcementMetricsResponse {
   timestamp: string;
 }
 
+import apiClient from "@/lib/api";
+
 // API fetch functions
 async function fetchEnforcementFlags(): Promise<EnforcementFlagsResponse> {
-  const response = await fetch("/api/v1/admin/enforcement/flags", {
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-    },
-  });
-  if (!response.ok) throw new Error("Failed to fetch enforcement flags");
-  return response.json();
+  const response = await apiClient.get("/api/v1/admin/enforcement/flags");
+  return response.data;
 }
 
 async function fetchEnforcementEvents(hours: number = 24): Promise<EnforcementEventsResponse> {
-  const response = await fetch(`/api/v1/admin/enforcement/events?hours=${hours}`, {
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-    },
-  });
-  if (!response.ok) throw new Error("Failed to fetch enforcement events");
-  return response.json();
+  const response = await apiClient.get(`/api/v1/admin/enforcement/events?hours=${hours}`);
+  return response.data;
 }
 
 async function fetchEnforcementMetrics(): Promise<EnforcementMetricsResponse> {
-  const response = await fetch("/api/v1/admin/enforcement/metrics", {
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-    },
-  });
-  if (!response.ok) throw new Error("Failed to fetch enforcement metrics");
-  return response.json();
+  const response = await apiClient.get("/api/v1/admin/enforcement/metrics");
+  return response.data;
 }
 
 export default function EnforcementObservabilityPage() {

@@ -170,6 +170,7 @@ export const mainNavigationItems: AdminNavItem[] = [
           { name: "Overview", path: "/system/ml-training" },
           { name: "Training Jobs", path: "/system/ml-training/jobs" },
           { name: "Verified Review", path: "/system/ml-training/manifests" },
+          { name: "Vision Jobs", path: "/system/ml-training/vision-jobs" },
           { name: "Model Versions", path: "/system/ml-training/models" },
         ],
       },

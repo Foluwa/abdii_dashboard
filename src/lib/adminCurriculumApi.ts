@@ -121,6 +121,7 @@ export async function uploadBlueprintAsset(
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      timeout: 120000,
       onUploadProgress: (event) => {
         if (!event.total || !onProgress) return;
         onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));

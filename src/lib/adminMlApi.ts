@@ -148,6 +148,92 @@ export type VerifiedPromotionCandidateListResponse = {
   offset: number;
 };
 
+export type HandwritingCandidateManifest = {
+  id: string;
+  language_code: string;
+  dataset_kind: string;
+  source: string;
+  source_prefix?: string | null;
+  status: string;
+  summary?: Record<string, unknown>;
+  status_counts?: Record<string, number>;
+  per_class_counts?: Array<{
+    case_group?: string | null;
+    label?: string | null;
+    review_status: string;
+    count: number;
+  }>;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type HandwritingCandidate = {
+  id: string;
+  manifest_id: string;
+  language_code: string;
+  source_type: string;
+  source_key: string;
+  candidate_key?: string | null;
+  image_hash?: string | null;
+  raw_label?: string | null;
+  suggested_label?: string | null;
+  suggested_case_group?: "LOWER_CASE" | "UPPER_CASE" | null;
+  final_label?: string | null;
+  final_case_group?: "LOWER_CASE" | "UPPER_CASE" | null;
+  review_status: "pending" | "approved" | "rejected";
+  review_notes?: string | null;
+  quality_flags?: Record<string, unknown>;
+  vision_status?: string;
+  vision_suggestion?: Record<string, unknown> | null;
+  vision_provider?: string | null;
+  vision_model?: string | null;
+  vision_confidence?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  reviewed_at?: string | null;
+};
+
+export type HandwritingCandidateListResponse = {
+  items: HandwritingCandidate[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type HandwritingPromotionResult = {
+  promotion_run_id?: string;
+  manifest_id: string;
+  mode: "dry_run" | "apply";
+  status: "pending" | "succeeded" | "failed" | "blocked";
+  valid: boolean;
+  apply_allowed: boolean;
+  target_prefix: string;
+  approved_count: number;
+  files_to_copy: Array<{
+    candidate_id?: string;
+    status?: string;
+    reason?: string;
+    source_key?: string;
+    destination_key?: string;
+    class_id?: string;
+  }>;
+  copied_count: number;
+  skipped_count: number;
+  failed_count: number;
+  validation_errors: Array<Record<string, unknown>>;
+  per_class_impact: Array<{
+    language_code: string;
+    case_group: string;
+    label: string;
+    class_id: string;
+    before: number;
+    would_add: number;
+    added: number;
+    after: number;
+  }>;
+  created_at?: string;
+};
+
 export type VerifiedPromotionReadinessResponse = {
   threshold: number;
   languages: Array<{
@@ -442,5 +528,417 @@ export async function uploadHandwritingCandidateSamples(payload: {
     form,
     { headers: { "Content-Type": "multipart/form-data" } }
   );
+  return res.data;
+}
+
+export async function uploadHandwritingCandidatesDb(payload: {
+  language: "yor" | "eng";
+  class_label: string;
+  contributor_id?: string;
+  files: File[];
+}) {
+  const form = new FormData();
+  form.set("language", payload.language);
+  form.set("class_label", payload.class_label);
+  if (payload.contributor_id) form.set("contributor_id", payload.contributor_id);
+  payload.files.forEach((file) => form.append("files", file));
+  const res = await apiClient.post<{
+    manifest_id: string;
+    uploaded_count: number;
+    rejected_count: number;
+    validation_errors?: Array<{ filename: string; error: string }>;
+    message: string;
+  }>(
+    "/api/v1/admin/ml/handwriting/candidates/upload-db",
+    form,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  );
+  return res.data;
+}
+
+export async function listHandwritingCandidateManifests(params?: {
+  language_code?: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  const res = await apiClient.get<{ items: HandwritingCandidateManifest[]; total: number; limit: number; offset: number }>(
+    `/api/v1/admin/ml/handwriting/candidate-manifests${buildQuery({
+      language_code: params?.language_code,
+      status: params?.status,
+      limit: params?.limit,
+      offset: params?.offset,
+    })}`
+  );
+  return res.data;
+}
+
+export async function createHandwritingCandidateManifest(payload: {
+  language_code: "yor" | "eng";
+  dataset_kind?: "alphabet_handwriting";
+  source?: "drawings" | "dashboard_upload" | "r2_import" | "feedback" | "mixed";
+  source_prefix?: string;
+  dry_run?: boolean;
+  limit?: number;
+}) {
+  const res = await apiClient.post<Record<string, unknown>>(
+    "/api/v1/admin/ml/handwriting/candidate-manifests",
+    {
+      language_code: payload.language_code,
+      dataset_kind: payload.dataset_kind ?? "alphabet_handwriting",
+      source: payload.source ?? "drawings",
+      source_prefix: payload.source_prefix,
+      dry_run: payload.dry_run ?? true,
+      limit: payload.limit ?? 1000,
+    }
+  );
+  return res.data;
+}
+
+export async function getHandwritingCandidateManifest(manifestId: string) {
+  const res = await apiClient.get<HandwritingCandidateManifest>(
+    `/api/v1/admin/ml/handwriting/candidate-manifests/${manifestId}`
+  );
+  return res.data;
+}
+
+export async function listHandwritingCandidates(params?: {
+  manifest_id?: string;
+  language_code?: string;
+  case_group?: "LOWER_CASE" | "UPPER_CASE";
+  label?: string;
+  suggested_label?: string;
+  final_label?: string;
+  review_status?: "pending" | "approved" | "rejected";
+  vision_status?: string;
+  source_type?: string;
+  conflict_only?: boolean;
+  duplicate_only?: boolean;
+  limit?: number;
+  offset?: number;
+}) {
+  const res = await apiClient.get<HandwritingCandidateListResponse>(
+    `/api/v1/admin/ml/handwriting/candidates${buildQuery({
+      manifest_id: params?.manifest_id,
+      language_code: params?.language_code,
+      case_group: params?.case_group,
+      label: params?.label,
+      suggested_label: params?.suggested_label,
+      final_label: params?.final_label,
+      review_status: params?.review_status,
+      vision_status: params?.vision_status,
+      source_type: params?.source_type,
+      conflict_only: params?.conflict_only,
+      duplicate_only: params?.duplicate_only,
+      limit: params?.limit,
+      offset: params?.offset,
+    })}`
+  );
+  return res.data;
+}
+
+export async function updateHandwritingCandidate(
+  candidateId: string,
+  payload: {
+    review_status: "pending" | "approved" | "rejected";
+    final_label?: string;
+    final_case_group?: "LOWER_CASE" | "UPPER_CASE";
+    review_notes?: string;
+  }
+) {
+  const res = await apiClient.patch<HandwritingCandidate>(
+    `/api/v1/admin/ml/handwriting/candidates/${candidateId}`,
+    {
+      review_status: payload.review_status,
+      final_label: payload.final_label ?? null,
+      final_case_group: payload.final_case_group ?? null,
+      review_notes: payload.review_notes ?? null,
+    }
+  );
+  return res.data;
+}
+
+export async function bulkUpdateHandwritingCandidates(payload: {
+  candidate_ids: string[];
+  review_status: "pending" | "approved" | "rejected";
+  review_notes?: string;
+}) {
+  const res = await apiClient.patch<{ updated: number; items: HandwritingCandidate[] }>(
+    "/api/v1/admin/ml/handwriting/candidates/bulk",
+    {
+      candidate_ids: payload.candidate_ids,
+      review_status: payload.review_status,
+      review_notes: payload.review_notes ?? null,
+    }
+  );
+  return res.data;
+}
+
+export async function getHandwritingCandidatePreview(candidateId: string) {
+  const res = await apiClient.get<{ preview_url: string; source_key: string; expires_seconds: number }>(
+    `/api/v1/admin/ml/handwriting/candidates/${candidateId}/preview`
+  );
+  return res.data;
+}
+
+export async function dryRunHandwritingCandidatePromotion(
+  manifestId: string,
+  payload?: { target_prefix?: string }
+) {
+  const res = await apiClient.post<HandwritingPromotionResult>(
+    `/api/v1/admin/ml/handwriting/candidate-manifests/${manifestId}/promotions/dry-run`,
+    { target_prefix: payload?.target_prefix ?? null }
+  );
+  return res.data;
+}
+
+export async function applyHandwritingCandidatePromotion(
+  manifestId: string,
+  payload: { confirmation: string; target_prefix?: string }
+) {
+  const res = await apiClient.post<HandwritingPromotionResult>(
+    `/api/v1/admin/ml/handwriting/candidate-manifests/${manifestId}/promotions/apply`,
+    { confirmation: payload.confirmation, target_prefix: payload.target_prefix ?? null }
+  );
+  return res.data;
+}
+
+// ── Vision Labeling ─────────────────────────────────────────────────────────
+
+export type VisionProvider = {
+  name: string;
+  enabled: boolean;
+  supports_image_input: boolean;
+  supports_batch: boolean;
+  default_model: string | null;
+  disabled_reason: string | null;
+};
+
+export type VisionProvidersResponse = {
+  providers: VisionProvider[];
+};
+
+export type VisionJobEstimate = {
+  candidate_count: number;
+  estimated_cost: {
+    currency: string;
+    low: number;
+    high: number;
+    estimated_input_tokens?: number;
+    estimated_output_tokens?: number;
+    model?: string;
+    mode?: string;
+    note?: string;
+  };
+  provider: string;
+  model: string;
+  mode: "sync" | "batch";
+  requires_confirmation: boolean;
+  confirmation_text: string;
+  blocked: boolean;
+  blocked_reason: string | null;
+};
+
+export type VisionJob = {
+  id: string;
+  provider: string;
+  model: string;
+  mode: "sync" | "batch";
+  status: string;
+  manifest_id?: string | null;
+  request_count: number;
+  completed_count: number;
+  failed_count: number;
+  estimated_cost?: Record<string, unknown>;
+  provider_batch_id?: string | null;
+  error_message?: string | null;
+  created_by?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  completed_at?: string | null;
+  items?: VisionJobItem[];
+};
+
+export type VisionJobItem = {
+  id: string;
+  job_id: string;
+  candidate_id: string;
+  status: string;
+  parsed_suggestion?: Record<string, unknown>;
+  error_message?: string | null;
+};
+
+export type VisionJobListResponse = {
+  items: VisionJob[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type VisionSuggestionResult = {
+  candidate_id: string;
+  suggestion: VisionSuggestion;
+  vision_status: string;
+  vision_provider: string;
+  vision_model: string;
+};
+
+export type VisionSuggestion = {
+  predicted_label: string | null;
+  case_group: "LOWER_CASE" | "UPPER_CASE" | null;
+  confidence: number | null;
+  is_blank: boolean;
+  is_noise: boolean;
+  is_ambiguous: boolean;
+  review_recommendation: "approve_suggestion" | "manual_review" | "reject";
+  reason: string;
+};
+
+export type VisionUseSuggestionResult = {
+  candidate_id: string;
+  action: "applied" | "cleared";
+  final_label?: string;
+  final_case_group?: string;
+  note?: string;
+  message?: string;
+};
+
+export async function getHandwritingVisionProviders() {
+  const res = await apiClient.get<VisionProvidersResponse>(
+    "/api/v1/admin/ml/handwriting/vision/providers"
+  );
+  return res.data;
+}
+
+export async function estimateHandwritingVisionJob(payload: {
+  provider: "openai" | "deepseek";
+  model: string;
+  manifest_id?: string;
+  candidate_ids?: string[];
+  filters?: Record<string, unknown>;
+  mode?: "sync" | "batch";
+  max_candidates?: number;
+  language_code?: "yor" | "eng";
+}) {
+  const res = await apiClient.post<VisionJobEstimate>(
+    "/api/v1/admin/ml/handwriting/vision/jobs/estimate",
+    {
+      provider: payload.provider ?? "openai",
+      model: payload.model ?? "gpt-4.1-mini",
+      manifest_id: payload.manifest_id ?? null,
+      candidate_ids: payload.candidate_ids ?? [],
+      filters: payload.filters ?? null,
+      mode: payload.mode ?? "batch",
+      max_candidates: payload.max_candidates ?? 50,
+      language_code: payload.language_code ?? "yor",
+    }
+  );
+  return res.data;
+}
+
+export async function createHandwritingVisionJob(payload: {
+  provider: "openai" | "deepseek";
+  model: string;
+  manifest_id?: string;
+  candidate_ids?: string[];
+  filters?: Record<string, unknown>;
+  mode?: "sync" | "batch";
+  max_candidates?: number;
+  confirmation?: string;
+  language_code?: "yor" | "eng";
+}) {
+  const res = await apiClient.post<VisionJob>(
+    "/api/v1/admin/ml/handwriting/vision/jobs",
+    {
+      provider: payload.provider ?? "openai",
+      model: payload.model ?? "gpt-4.1-mini",
+      manifest_id: payload.manifest_id ?? null,
+      candidate_ids: payload.candidate_ids ?? [],
+      filters: payload.filters ?? null,
+      mode: payload.mode ?? "batch",
+      max_candidates: payload.max_candidates ?? 50,
+      confirmation: payload.confirmation ?? null,
+      language_code: payload.language_code ?? "yor",
+    }
+  );
+  return res.data;
+}
+
+export async function listHandwritingVisionJobs(params?: {
+  status?: string;
+  provider?: string;
+  manifest_id?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  const res = await apiClient.get<VisionJobListResponse>(
+    `/api/v1/admin/ml/handwriting/vision/jobs${buildQuery({
+      status: params?.status,
+      provider: params?.provider,
+      manifest_id: params?.manifest_id,
+      limit: params?.limit,
+      offset: params?.offset,
+    })}`
+  );
+  return res.data;
+}
+
+export async function getHandwritingVisionJob(jobId: string) {
+  const res = await apiClient.get<VisionJob>(
+    `/api/v1/admin/ml/handwriting/vision/jobs/${jobId}`
+  );
+  return res.data;
+}
+
+export async function cancelHandwritingVisionJob(jobId: string) {
+  const res = await apiClient.post<{ job_id: string; status: string; message: string }>(
+    `/api/v1/admin/ml/handwriting/vision/jobs/${jobId}/cancel`
+  );
+  return res.data;
+}
+
+export async function suggestHandwritingCandidateLabel(
+  candidateId: string,
+  payload?: { provider?: string; model?: string }
+) {
+  const res = await apiClient.post<VisionSuggestionResult>(
+    `/api/v1/admin/ml/handwriting/candidates/${candidateId}/vision-suggestion`,
+    { provider: payload?.provider ?? null, model: payload?.model ?? null }
+  );
+  return res.data;
+}
+
+export async function acceptHandwritingVisionSuggestion(
+  candidateId: string,
+  accept: boolean
+) {
+  const res = await apiClient.post<VisionUseSuggestionResult>(
+    `/api/v1/admin/ml/handwriting/candidates/${candidateId}/use-suggestion`,
+    { accept }
+  );
+  return res.data;
+}
+
+export async function pollHandwritingVisionJob(jobId: string) {
+  const res = await apiClient.post<{
+    job_id: string;
+    status: string;
+    provider_status?: string;
+    completed_count?: number;
+    failed_count?: number;
+    message?: string;
+    error?: string;
+  }>(`/api/v1/admin/ml/handwriting/vision/jobs/${jobId}/poll`);
+  return res.data;
+}
+
+export async function importHandwritingVisionJobResults(jobId: string) {
+  const res = await apiClient.post<{
+    job_id: string;
+    status: string;
+    completed_count?: number;
+    failed_count?: number;
+    message?: string;
+  }>(`/api/v1/admin/ml/handwriting/vision/jobs/${jobId}/import-results`);
   return res.data;
 }

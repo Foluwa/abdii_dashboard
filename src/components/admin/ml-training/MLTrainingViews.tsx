@@ -13,31 +13,43 @@ import {
   getMlTrainingJob,
   getMlTrainingJobLogs,
   getHandwritingDatasetReadiness,
-  applyVerifiedPromotionManifest,
-  dryRunVerifiedPromotionManifest,
-  generateVerifiedPromotionManifest,
+  applyHandwritingCandidatePromotion,
+  bulkUpdateHandwritingCandidates,
+  createHandwritingCandidateManifest,
+  dryRunHandwritingCandidatePromotion,
+  getHandwritingCandidateManifest,
+  getHandwritingCandidatePreview,
+  listHandwritingCandidateManifests,
+  listHandwritingCandidates,
   getVerifiedPromotionCollectionGaps,
-  getVerifiedPromotionCandidatePreview,
-  getVerifiedPromotionManifest,
   getVerifiedPromotionReadiness,
   listMlModelVersions,
   listMlTrainingJobs,
-  listVerifiedPromotionCandidates,
-  listVerifiedPromotionManifests,
   promoteMlModelVersion,
   rollbackMlModelVersion,
-  updateVerifiedPromotionCandidates,
   uploadHandwritingCandidateSamples,
+  uploadHandwritingCandidatesDb,
+  getHandwritingVisionProviders,
+  estimateHandwritingVisionJob,
+  createHandwritingVisionJob,
+  suggestHandwritingCandidateLabel,
+  acceptHandwritingVisionSuggestion,
+  pollHandwritingVisionJob,
+  importHandwritingVisionJobResults,
+  getHandwritingVisionJob,
   type HandwritingDatasetReadinessResponse,
+  type HandwritingCandidate,
+  type HandwritingCandidateManifest,
+  type HandwritingPromotionResult,
   type MlModelVersion,
   type MlReadinessResponse,
   type MlTrainingJob,
   type MlTrainingJobEvent,
-  type VerifiedPromotionCandidate,
   type VerifiedPromotionCollectionGapResponse,
-  type VerifiedPromotionManifest,
   type VerifiedPromotionReadinessResponse,
-  validateVerifiedPromotionManifest,
+  type VisionProvidersResponse,
+  type VisionJobEstimate,
+  type VisionSuggestionResult,
 } from "@/lib/adminMlApi";
 
 const PAGE_SIZE = 20;
@@ -160,113 +172,6 @@ function JsonPreview({ value }: { value: unknown }) {
 
 function asRecordArray(value: unknown): Record<string, unknown>[] {
   return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null) : [];
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function isDryRunApplyAllowed(report: Record<string, unknown> | null, manifest: VerifiedPromotionManifest | null) {
-  if (!report || report.mode !== "dry-run") return false;
-  const validationErrors = asRecordArray(report.validation_errors);
-  const failed = Number(report.failed ?? 0);
-  return report.valid === true && failed === 0 && validationErrors.length === 0 && countFor(manifest, "pending") === 0;
-}
-
-function PromotionReportPreview({
-  report,
-  manifest,
-}: {
-  report: Record<string, unknown>;
-  manifest: VerifiedPromotionManifest | null;
-}) {
-  const filesToCopy = asRecordArray(report.files_to_copy);
-  const perClassImpact = asRecordArray(report.per_class_impact);
-  const skippedFiles = asRecordArray(report.skipped_files);
-  const validationErrors = asRecordArray(report.validation_errors);
-  const manifestUpdates = asRecord(report.manifest_updates);
-  const beforeCounts = asRecord(report.before_verified_counts);
-  const applyAllowed = isDryRunApplyAllowed(report, manifest);
-
-  return (
-    <div className="space-y-5">
-      <div className={`rounded-lg border p-4 text-sm ${applyAllowed ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200" : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"}`}>
-        Real apply is {applyAllowed ? "allowed by this dry-run preview" : "blocked"}.{" "}
-        {!applyAllowed ? "Resolve validation errors, failed copy checks, or pending candidates before applying." : null}
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-4">
-        <SummaryCard label="Mode" value={String(report.mode ?? "-")} />
-        <SummaryCard label="Approved Rows" value={Number(report.approved_rows ?? 0)} />
-        <SummaryCard label="Would Copy" value={filesToCopy.length} />
-        <SummaryCard label="Validation Errors" value={validationErrors.length} />
-      </div>
-
-      <Panel title="Files That Would Be Promoted">
-        {filesToCopy.length > 0 ? (
-          <div className="max-h-72 overflow-auto">
-            <table className="min-w-full divide-y divide-gray-100 text-xs dark:divide-gray-800">
-              <thead>
-                <tr className="text-left uppercase text-gray-500 dark:text-gray-400">
-                  <th className="px-3 py-2">Source Path</th>
-                  <th className="px-3 py-2">Destination Path</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                {filesToCopy.map((file, index) => (
-                  <tr key={`${file.source_key}-${file.target_key}-${index}`}>
-                    <td className="break-all px-3 py-2 text-gray-700 dark:text-gray-300">{String(file.source_key ?? "-")}</td>
-                    <td className="break-all px-3 py-2 text-gray-700 dark:text-gray-300">{String(file.target_key ?? "-")}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : <div className="text-sm text-gray-500 dark:text-gray-400">No files would be promoted.</div>}
-      </Panel>
-
-      <Panel title="Per-Class Count Impact">
-        {perClassImpact.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
-              <thead>
-                <tr className="text-left text-xs uppercase text-gray-500 dark:text-gray-400">
-                  <th className="px-3 py-2">Class</th>
-                  <th className="px-3 py-2">Approved Pending</th>
-                  <th className="px-3 py-2">Before Verified</th>
-                  <th className="px-3 py-2">After Verified</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                {perClassImpact.map((item, index) => (
-                  <tr key={`${item.language}-${item.label}-${index}`}>
-                    <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">{String(item.language ?? "-")} {String(item.label ?? "-")}</td>
-                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{String(item.approved_pending ?? 0)}</td>
-                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{String(item.before_verified_count ?? 0)}</td>
-                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{String(item.after_verified_count ?? 0)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : <div className="text-sm text-gray-500 dark:text-gray-400">No per-class impact reported.</div>}
-      </Panel>
-
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Panel title="Manifest Changes"><JsonPreview value={manifestUpdates} /></Panel>
-        <Panel title="Before Verified Counts"><JsonPreview value={beforeCounts} /></Panel>
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Panel title="Skipped Files">
-          {skippedFiles.length > 0 ? <JsonPreview value={skippedFiles} /> : <div className="text-sm text-gray-500 dark:text-gray-400">No skipped files.</div>}
-        </Panel>
-        <Panel title="Validation Errors">
-          {validationErrors.length > 0 ? <JsonPreview value={validationErrors} /> : <div className="text-sm text-gray-500 dark:text-gray-400">No validation errors.</div>}
-        </Panel>
-      </div>
-    </div>
-  );
 }
 
 function getLatestSmoke(jobs: MlTrainingJob[]) {
@@ -679,8 +584,12 @@ export function MLTrainingJobDetailPage() {
   );
 }
 
+const MODEL_PAGE_SIZE = 20;
+
 export function MLModelVersionsPage() {
   const [models, setModels] = useState<MlModelVersion[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
   const [statusFilter, setStatusFilter] = useState("");
   const [languageFilter, setLanguageFilter] = useState("");
   const [loading, setLoading] = useState(false);
@@ -696,15 +605,20 @@ export function MLModelVersionsPage() {
       const response = await listMlModelVersions({
         status: statusFilter || undefined,
         language_code: languageFilter || undefined,
-        limit: 50,
-        offset: 0,
+        limit: MODEL_PAGE_SIZE,
+        offset: page * MODEL_PAGE_SIZE,
       });
       setModels(response.items);
+      setTotal(response.total);
     } catch (err: any) {
       setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to load model versions.");
     } finally {
       setLoading(false);
     }
+  }, [languageFilter, statusFilter, page]);
+
+  useEffect(() => {
+    setPage(0);
   }, [languageFilter, statusFilter]);
 
   const runModelAction = useCallback(async (model: MlModelVersion, action: "promote" | "rollback") => {
@@ -823,6 +737,11 @@ export function MLModelVersionsPage() {
           </div>
         )}
       </Panel>
+      <Pagination
+        currentPage={page}
+        totalPages={Math.ceil(total / MODEL_PAGE_SIZE)}
+        onPageChange={(newPage) => setPage(newPage)}
+      />
       <ConfirmationModal
         isOpen={!!pendingModelAction}
         onClose={() => setPendingModelAction(null)}
@@ -839,14 +758,86 @@ export function MLModelVersionsPage() {
   );
 }
 
-function countFor(manifest: VerifiedPromotionManifest | null | undefined, status: string) {
+function countFor(manifest: { status_counts?: Record<string, number> } | null | undefined, status: string) {
   return manifest?.status_counts?.[status] ?? 0;
 }
 
-export function MLVerifiedPromotionManifestsPage() {
-  const [manifests, setManifests] = useState<VerifiedPromotionManifest[]>([]);
+function TrainingPromotionPreview({ result }: { result: HandwritingPromotionResult }) {
+  return (
+    <div className="mt-4 space-y-4">
+      <div className={`rounded-lg border p-4 text-sm ${result.valid ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200" : "border-red-200 bg-red-50 text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200"}`}>
+        Dry-run status: {result.status}. Real apply is {result.apply_allowed ? "allowed after exact confirmation" : "blocked"}.
+      </div>
+      <div className="grid gap-3 md:grid-cols-4">
+        <SummaryCard label="Approved" value={result.approved_count} />
+        <SummaryCard label="Would Copy" value={result.files_to_copy.length} />
+        <SummaryCard label="Skipped" value={result.skipped_count} />
+        <SummaryCard label="Errors" value={result.validation_errors.length} />
+      </div>
+      <Panel title="Files To Promote">
+        {result.files_to_copy.length > 0 ? (
+          <div className="max-h-72 overflow-auto">
+            <table className="min-w-full divide-y divide-gray-100 text-xs dark:divide-gray-800">
+              <thead>
+                <tr className="text-left uppercase text-gray-500 dark:text-gray-400">
+                  <th className="px-3 py-2">Source</th>
+                  <th className="px-3 py-2">Destination</th>
+                  <th className="px-3 py-2">Class</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                {result.files_to_copy.map((file, index) => (
+                  <tr key={`${file.source_key}-${file.destination_key}-${index}`}>
+                    <td className="break-all px-3 py-2 text-gray-700 dark:text-gray-300">{file.source_key || "-"}</td>
+                    <td className="break-all px-3 py-2 text-gray-700 dark:text-gray-300">{file.destination_key || "-"}</td>
+                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{file.class_id || "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <div className="text-sm text-gray-500 dark:text-gray-400">No files are ready to promote.</div>}
+      </Panel>
+      <Panel title="Per-Class Impact">
+        {result.per_class_impact.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
+              <thead>
+                <tr className="text-left text-xs uppercase text-gray-500 dark:text-gray-400">
+                  <th className="px-3 py-2">Class</th>
+                  <th className="px-3 py-2">Before</th>
+                  <th className="px-3 py-2">Would Add</th>
+                  <th className="px-3 py-2">After Apply</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                {result.per_class_impact.map((item) => (
+                  <tr key={item.class_id}>
+                    <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">{item.language_code} / {item.class_id}</td>
+                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{item.before}</td>
+                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{item.would_add}</td>
+                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{item.after}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <div className="text-sm text-gray-500 dark:text-gray-400">No class impact reported.</div>}
+      </Panel>
+      {result.validation_errors.length > 0 ? (
+        <Panel title="Validation Errors"><JsonPreview value={result.validation_errors} /></Panel>
+      ) : null}
+    </div>
+  );
+}
+
+// Deprecated naming: now uses DB-backed handwriting_candidates.
+// Kept for backward compatibility with existing routes.
+export function MLCandidateReviewManifestsPage() {
+  const [manifests, setManifests] = useState<HandwritingCandidateManifest[]>([]);
   const [readiness, setReadiness] = useState<VerifiedPromotionReadinessResponse | null>(null);
   const [collectionGaps, setCollectionGaps] = useState<VerifiedPromotionCollectionGapResponse | null>(null);
+  const [gapSearch, setGapSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -864,7 +855,7 @@ export function MLVerifiedPromotionManifestsPage() {
     setError(null);
     try {
       const [manifestResponse, readinessResponse, gapResponse] = await Promise.all([
-        listVerifiedPromotionManifests(),
+        listHandwritingCandidateManifests({ limit: 50, offset: 0 }),
         getVerifiedPromotionReadiness(300),
         getVerifiedPromotionCollectionGaps({ target_low: 300, target_high: 500 }),
       ]);
@@ -872,7 +863,7 @@ export function MLVerifiedPromotionManifestsPage() {
       setReadiness(readinessResponse);
       setCollectionGaps(gapResponse);
     } catch (err: any) {
-      setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to load verified promotion manifests.");
+      setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to load handwriting candidate manifests.");
     } finally {
       setLoading(false);
     }
@@ -887,11 +878,17 @@ export function MLVerifiedPromotionManifestsPage() {
     setError(null);
     setSuccess(null);
     try {
-      const result = await generateVerifiedPromotionManifest("all", { dry_run: true });
-      setSuccess(`Manifest refresh preview ready. ${(result.manifest_changes as any)?.would_generate_new_manifest ? "A new manifest would be generated." : ""}`);
+      const result = await createHandwritingCandidateManifest({
+        language_code: "yor",
+        source: "drawings",
+        source_prefix: "drawings/yor/",
+        dry_run: true,
+        limit: 1000,
+      });
+      setSuccess(`Candidate import preview ready. ${Number(result.would_insert_candidates ?? result.detected_count ?? 0).toLocaleString()} drawing candidate(s) found under drawings/yor/.`);
       await refresh();
     } catch (err: any) {
-      setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to generate manifest.");
+      setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to preview candidate import.");
     } finally {
       setGenerating(false);
       setShowGenerateConfirm(false);
@@ -907,19 +904,18 @@ export function MLVerifiedPromotionManifestsPage() {
     setError(null);
     setSuccess(null);
     try {
-      const result = await uploadHandwritingCandidateSamples({
+      const result = await uploadHandwritingCandidatesDb({
         language: uploadLanguage,
         class_label: uploadLabel,
-        source: "dashboard_upload",
         contributor_id: uploadContributor.trim() || undefined,
         files: uploadFiles,
       });
       const validationErrors = asRecordArray(result.validation_errors);
       setUploadValidationErrors(validationErrors);
-      setSuccess(`Uploaded ${result.uploaded_count ?? 0} candidate(s); ${result.rejected_count ?? 0} rejected by validation.`);
-      setUploadFiles([]);
       if (Number(result.uploaded_count ?? 0) > 0 && result.manifest_id) {
-        setSuccess(`Uploaded ${result.uploaded_count ?? 0} candidate(s) into review manifest ${String(result.manifest_id)}; ${result.rejected_count ?? 0} rejected by validation.`);
+        setSuccess(`Uploaded ${result.uploaded_count ?? 0} candidate(s) into DB review manifest ${String(result.manifest_id)}; ${result.rejected_count ?? 0} rejected by validation.`);
+      } else {
+        setSuccess(`Uploaded ${result.uploaded_count ?? 0} candidate(s); ${result.rejected_count ?? 0} rejected by validation.`);
       }
       await refresh();
     } catch (err: any) {
@@ -932,15 +928,15 @@ export function MLVerifiedPromotionManifestsPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <PageBreadCrumb pageTitle="Verified Dataset Review" />
+      <PageBreadCrumb pageTitle="Handwriting Candidate Review" />
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Verified Dataset Review</h1>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Review handwriting samples before promotion into datasets/verified/*.</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Handwriting Candidate Review</h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Review raw handwriting samples before guarded promotion into datasets/training/*.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>Refresh</Button>
-          <Button size="sm" onClick={() => setShowGenerateConfirm(true)} disabled={generating}>{generating ? "Generating..." : "Generate Pending Manifest"}</Button>
+          <Button size="sm" onClick={() => setShowGenerateConfirm(true)} disabled={generating}>{generating ? "Previewing..." : "Preview Drawings Import"}</Button>
         </div>
       </div>
       {error ? <InlineError message={error} /> : null}
@@ -958,7 +954,7 @@ export function MLVerifiedPromotionManifestsPage() {
                 <SummaryCard label="Gaps" value={lang.not_ready_count} />
               </div>
               <div className="mt-3 max-h-40 overflow-auto text-xs text-gray-600 dark:text-gray-300">
-                {lang.priority_gaps.slice(0, 20).map((gap) => (
+                {lang.priority_gaps.map((gap) => (
                   <div key={gap.label} className="flex justify-between border-b border-gray-100 py-1 dark:border-gray-800">
                     <span>{gap.label}</span><span>{gap.count}/{lang.threshold}</span>
                   </div>
@@ -970,8 +966,16 @@ export function MLVerifiedPromotionManifestsPage() {
         </div>
       </Panel>
       <Panel title="Missing / Low Sample Classes">
-        <div className="mb-3 text-sm text-gray-600 dark:text-gray-400">
-          Focused collection targets for handwriting classes blocking the verified-data gate. Counts include reviewed manifest approvals as pending impact, but do not assume promotion has been applied.
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            Focused collection targets for handwriting classes blocking the verified-data gate. Counts include reviewed manifest approvals as pending impact, but do not assume promotion has been applied.
+          </div>
+          <input
+            value={gapSearch}
+            onChange={(event) => setGapSearch(event.target.value)}
+            placeholder="Search class..."
+            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+          />
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
@@ -988,7 +992,11 @@ export function MLVerifiedPromotionManifestsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {(collectionGaps?.items || []).slice(0, 40).map((gap) => (
+              {(collectionGaps?.items || []).filter((gap) => {
+                if (!gapSearch.trim()) return true;
+                const q = gapSearch.toLowerCase();
+                return gap.label.toLowerCase().includes(q) || gap.language.toLowerCase().includes(q);
+              }).map((gap) => (
                 <tr key={`${gap.language}-${gap.label}`} className="text-gray-700 dark:text-gray-200">
                   <td className="px-3 py-2 font-medium">{gap.language} {gap.label}</td>
                   <td className="px-3 py-2">{gap.current_candidates}</td>
@@ -1007,7 +1015,7 @@ export function MLVerifiedPromotionManifestsPage() {
       </Panel>
       <Panel title="Candidate Upload">
         <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200">
-          Upload stores files as review candidates only. It never writes directly to datasets/verified/* and does not make samples available for training until they are reviewed and promoted.
+          Upload stores files as review candidates only. It never writes directly to datasets/training/* and does not make samples available for training until they are reviewed and promoted.
         </div>
         <div className="grid gap-3 md:grid-cols-[160px_1fr_1fr_2fr_auto]">
           <select value={uploadLanguage} onChange={(event) => setUploadLanguage(event.target.value as "yor" | "eng")} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white">
@@ -1067,12 +1075,12 @@ export function MLVerifiedPromotionManifestsPage() {
                       <div className="font-medium text-gray-900 dark:text-white">{manifest.id}</div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">{formatDate(manifest.created_at)}</div>
                     </td>
-                    <td className="px-3 py-3">{manifest.candidate_count}</td>
+                    <td className="px-3 py-3">{Number(manifest.summary?.inserted_count ?? manifest.summary?.detected_count ?? 0)}</td>
                     <td className="px-3 py-3">{countFor(manifest, "approved")}</td>
                     <td className="px-3 py-3">{countFor(manifest, "rejected")}</td>
                     <td className="px-3 py-3">{countFor(manifest, "pending")}</td>
-                    <td className="px-3 py-3"><StatusPill status={manifest.validation_status} /></td>
-                    <td className="px-3 py-3"><StatusPill status={manifest.apply_status} /></td>
+                    <td className="px-3 py-3"><StatusPill status={manifest.status} /></td>
+                    <td className="px-3 py-3"><StatusPill status="not_applied" /></td>
                     <td className="px-3 py-3">
                       <Link href={`/operations/ml-training/manifests/${manifest.id}`} className="text-brand-600 hover:underline">Review</Link>
                     </td>
@@ -1088,9 +1096,9 @@ export function MLVerifiedPromotionManifestsPage() {
         isOpen={showGenerateConfirm}
         onClose={() => setShowGenerateConfirm(false)}
         onConfirm={() => void generate()}
-        title="Preview Manifest Refresh"
-        message="Preview manifest refresh from R2 source pools? This is read-only and will not promote samples or run training."
-        confirmText="Preview Refresh"
+        title="Preview Drawings Import"
+        message="Preview candidate import from drawings/yor/? This is read-only and will not promote samples or run training."
+        confirmText="Preview Import"
         variant="info"
         isLoading={generating}
       />
@@ -1098,25 +1106,25 @@ export function MLVerifiedPromotionManifestsPage() {
   );
 }
 
-function CandidatePreview({ manifestId, candidate }: { manifestId: string; candidate: VerifiedPromotionCandidate }) {
+function CandidatePreview({ candidate }: { candidate: HandwritingCandidate }) {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await getVerifiedPromotionCandidatePreview(manifestId, candidate.candidate_id);
+      const response = await getHandwritingCandidatePreview(candidate.id);
       setUrl(response.preview_url);
     } finally {
       setLoading(false);
     }
-  }, [candidate.candidate_id, manifestId]);
+  }, [candidate.id]);
 
   return (
     <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-900">
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt={candidate.label} loading="lazy" className="max-h-full max-w-full object-contain" />
+        <img src={url} alt={candidate.final_label || candidate.raw_label || "candidate"} loading="lazy" className="max-h-full max-w-full object-contain" />
       ) : (
         <button onClick={() => void load()} className="px-2 text-xs text-brand-600 hover:underline" disabled={loading}>
           {loading ? "Loading..." : "Preview"}
@@ -1126,28 +1134,42 @@ function CandidatePreview({ manifestId, candidate }: { manifestId: string; candi
   );
 }
 
-export function MLVerifiedPromotionManifestDetailPage() {
+// Deprecated naming: now uses DB-backed handwriting_candidates.
+// Kept for backward compatibility with existing routes.
+export function MLCandidateReviewManifestDetailPage() {
   const params = useParams<{ id: string }>();
   const manifestId = String(params?.id || "");
-  const [manifest, setManifest] = useState<VerifiedPromotionManifest | null>(null);
-  const [candidates, setCandidates] = useState<VerifiedPromotionCandidate[]>([]);
+  const [manifest, setManifest] = useState<HandwritingCandidateManifest | null>(null);
+  const [candidates, setCandidates] = useState<HandwritingCandidate[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [language, setLanguage] = useState("");
   const [label, setLabel] = useState("");
+  const [caseGroup, setCaseGroup] = useState("");
   const [reviewStatus, setReviewStatus] = useState("");
-  const [priorityOnly, setPriorityOnly] = useState(false);
   const [conflictOnly, setConflictOnly] = useState(false);
-  const [problemOnly, setProblemOnly] = useState(false);
+  const [duplicateOnly, setDuplicateOnly] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [report, setReport] = useState<Record<string, unknown> | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [visibleUpdateConfirm, setVisibleUpdateConfirm] = useState<{ ids: string[]; status: "pending" | "approved" | "rejected" } | null>(null);
+  const [promotionResult, setPromotionResult] = useState<HandwritingPromotionResult | null>(null);
+  const [promotionLoading, setPromotionLoading] = useState(false);
   const [applyConfirmOpen, setApplyConfirmOpen] = useState(false);
   const [applyConfirmationText, setApplyConfirmationText] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [visibleUpdateConfirm, setVisibleUpdateConfirm] = useState<{ ids: string[]; status: "pending" | "approved" | "rejected" } | null>(null);
   const limit = 25;
+
+  // Vision labeling state
+  const [providers, setProviders] = useState<VisionProvidersResponse | null>(null);
+  const [visionEstimate, setVisionEstimate] = useState<VisionJobEstimate | null>(null);
+  const [visionEstimateLoading, setVisionEstimateLoading] = useState(false);
+  const [visionJobLoading, setVisionJobLoading] = useState(false);
+  const [visionConfirmOpen, setVisionConfirmOpen] = useState(false);
+  const [visionConfirmationText, setVisionConfirmationText] = useState("");
+  const [suggestingId, setSuggestingId] = useState<string | null>(null);
+  const [usingSuggestionId, setUsingSuggestionId] = useState<string | null>(null);
+  const [visionProvider, setVisionProvider] = useState<string>("openai");
 
   const refresh = useCallback(async () => {
     if (!manifestId) return;
@@ -1155,14 +1177,15 @@ export function MLVerifiedPromotionManifestDetailPage() {
     setError(null);
     try {
       const [detail, candidateResponse] = await Promise.all([
-        getVerifiedPromotionManifest(manifestId),
-        listVerifiedPromotionCandidates(manifestId, {
-          language: language || undefined,
+        getHandwritingCandidateManifest(manifestId),
+        listHandwritingCandidates({
+          manifest_id: manifestId,
+          language_code: language || undefined,
+          case_group: (caseGroup || undefined) as "LOWER_CASE" | "UPPER_CASE" | undefined,
           label: label || undefined,
-          review_status: reviewStatus || undefined,
-          priority_only: priorityOnly,
+          review_status: (reviewStatus || undefined) as "pending" | "approved" | "rejected" | undefined,
           conflict_only: conflictOnly,
-          problem_only: problemOnly,
+          duplicate_only: duplicateOnly,
           limit,
           offset,
         }),
@@ -1172,18 +1195,125 @@ export function MLVerifiedPromotionManifestDetailPage() {
       setTotal(candidateResponse.total);
       setSelectedIds(new Set());
     } catch (err: any) {
-      setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to load manifest.");
+      setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to load candidate manifest.");
     } finally {
       setLoading(false);
     }
-  }, [conflictOnly, label, language, manifestId, offset, priorityOnly, problemOnly, reviewStatus]);
+  }, [caseGroup, conflictOnly, duplicateOnly, label, language, manifestId, offset, reviewStatus]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
+  const loadProviders = useCallback(async () => {
+    try {
+      const result = await getHandwritingVisionProviders();
+      setProviders(result);
+    } catch {
+      // Providers unavailable, UI shows disabled
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadProviders();
+  }, [loadProviders]);
+
+  const runVisionEstimate = useCallback(async () => {
+    setVisionEstimateLoading(true);
+    setError(null);
+    try {
+      const provider = visionProvider || "openai";
+      const model = provider === "deepseek" ? "deepseek-chat" : "gpt-4.1-mini";
+      const result = await estimateHandwritingVisionJob({
+        provider: provider as "openai" | "deepseek",
+        model,
+        manifest_id: manifestId,
+        language_code: (manifest?.language_code as "yor" | "eng") ?? "yor",
+        filters: { review_status: "pending", vision_status: "not_requested" },
+        max_candidates: 50,
+        mode: "batch",
+      });
+      setVisionEstimate(result);
+      if (result.requires_confirmation) {
+        setVisionConfirmOpen(true);
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to estimate vision job.");
+    } finally {
+      setVisionEstimateLoading(false);
+    }
+  }, [manifestId, manifest?.language_code, visionProvider]);
+
+  const runVisionJob = useCallback(async () => {
+    setVisionJobLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const provider = visionProvider || "openai";
+      const model = provider === "deepseek" ? "deepseek-chat" : "gpt-4.1-mini";
+      await createHandwritingVisionJob({
+        provider: provider as "openai" | "deepseek",
+        model,
+        manifest_id: manifestId,
+        language_code: (manifest?.language_code as "yor" | "eng") ?? "yor",
+        filters: { review_status: "pending", vision_status: "not_requested" },
+        max_candidates: 50,
+        mode: "batch",
+        confirmation: visionConfirmationText || undefined,
+      });
+      setSuccess("Vision label job created. Check Vision Jobs page for status.");
+      setVisionConfirmOpen(false);
+      setVisionConfirmationText("");
+      setVisionEstimate(null);
+      await refresh();
+    } catch (err: any) {
+      setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to create vision job.");
+    } finally {
+      setVisionJobLoading(false);
+    }
+  }, [manifestId, manifest?.language_code, visionConfirmationText, visionProvider, refresh]);
+
+  const runSingleSuggestion = useCallback(async (candidateId: string) => {
+    setSuggestingId(candidateId);
+    setError(null);
+    setSuccess(null);
+    try {
+      const result = await suggestHandwritingCandidateLabel(candidateId);
+      setSuccess(`Vision suggestion ready. Label: ${result.suggestion.predicted_label ?? "unknown"} (confidence: ${result.suggestion.confidence ?? "-"})`);
+      await refresh();
+    } catch (err: any) {
+      setError(err?.response?.data?.detail?.message ?? err?.message ?? "Vision suggestion failed.");
+    } finally {
+      setSuggestingId(null);
+    }
+  }, [refresh]);
+
+  const runUseSuggestion = useCallback(async (candidateId: string) => {
+    setUsingSuggestionId(candidateId);
+    setError(null);
+    setSuccess(null);
+    try {
+      const result = await acceptHandwritingVisionSuggestion(candidateId, true);
+      setSuccess(`Suggestion applied: ${result.final_label} (${result.final_case_group}). ${result.note ?? ""}`);
+      await refresh();
+    } catch (err: any) {
+      setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to apply suggestion.");
+    } finally {
+      setUsingSuggestionId(null);
+    }
+  }, [refresh]);
+
+  const openaiEnabled = useMemo(
+    () => providers?.providers?.some((p) => p.name === "openai" && p.enabled) ?? false,
+    [providers]
+  );
+  const deepseekEnabled = useMemo(
+    () => providers?.providers?.some((p) => p.name === "deepseek" && p.enabled) ?? false,
+    [providers]
+  );
+
   const updateVisible = useCallback(async (status: "pending" | "approved" | "rejected", candidateIds?: string[], confirmed = false) => {
-    const ids = candidateIds || candidates.map((candidate) => candidate.candidate_id);
+    const ids = candidateIds || candidates.map((candidate) => candidate.id);
     if (ids.length === 0) return;
     if (candidateIds === undefined && !confirmed) {
       setVisibleUpdateConfirm({ ids, status });
@@ -1192,55 +1322,60 @@ export function MLVerifiedPromotionManifestDetailPage() {
     setError(null);
     setSuccess(null);
     try {
-      const response = await updateVerifiedPromotionCandidates(manifestId, ids, status);
+      const response = await bulkUpdateHandwritingCandidates({ candidate_ids: ids, review_status: status });
       setSuccess(`Updated ${response.updated} candidate(s).`);
       setVisibleUpdateConfirm(null);
       await refresh();
     } catch (err: any) {
       setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to update candidates.");
     }
-  }, [candidates, manifestId, refresh]);
+  }, [candidates, refresh]);
 
   const selectedCandidateIds = useMemo(() => Array.from(selectedIds), [selectedIds]);
   const approvedCount = manifest ? countFor(manifest, "approved") : 0;
-  const applyAllowed = isDryRunApplyAllowed(report, manifest);
-  const applyBlockedReason = approvedCount === 0
-    ? "Approve at least one candidate first."
-    : !report || report.mode !== "dry-run"
-      ? "Run and review a successful dry-run before applying."
-      : countFor(manifest, "pending") > 0
-        ? "Resolve all pending candidates before applying."
-        : !applyAllowed
-          ? "Dry-run reported validation errors or failed checks."
-          : "";
+  const applyAllowed = promotionResult?.mode === "dry_run" && promotionResult.valid && promotionResult.apply_allowed && countFor(manifest, "pending") === 0;
 
-  const runPanelAction = useCallback(async (action: "validate" | "dry-run" | "apply") => {
+  const runPromotionDryRun = useCallback(async () => {
+    setPromotionLoading(true);
     setError(null);
     setSuccess(null);
     try {
-      let response: Record<string, unknown>;
-      if (action === "validate") response = await validateVerifiedPromotionManifest(manifestId);
-      else if (action === "dry-run") response = await dryRunVerifiedPromotionManifest(manifestId);
-      else {
-        response = await applyVerifiedPromotionManifest(manifestId, applyConfirmationText);
-        setApplyConfirmOpen(false);
-        setApplyConfirmationText("");
-      }
-      setReport(response);
-      setSuccess(`${action} completed.`);
+      const result = await dryRunHandwritingCandidatePromotion(manifestId);
+      setPromotionResult(result);
+      setSuccess("Promotion dry-run completed.");
       await refresh();
     } catch (err: any) {
-      setError(err?.response?.data?.detail?.message ?? err?.message ?? `Unable to ${action} manifest.`);
+      setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to run promotion dry-run.");
+    } finally {
+      setPromotionLoading(false);
+    }
+  }, [manifestId, refresh]);
+
+  const runPromotionApply = useCallback(async () => {
+    setPromotionLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const result = await applyHandwritingCandidatePromotion(manifestId, { confirmation: applyConfirmationText });
+      setPromotionResult(result);
+      setSuccess(`Promotion apply completed. Copied ${result.copied_count} file(s).`);
+      setApplyConfirmOpen(false);
+      setApplyConfirmationText("");
+      await refresh();
+    } catch (err: any) {
+      setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to apply promotion.");
+    } finally {
+      setPromotionLoading(false);
     }
   }, [applyConfirmationText, manifestId, refresh]);
 
   return (
     <div className="space-y-6 p-6">
-      <PageBreadCrumb pageTitle="Verified Manifest Review" />
+      <PageBreadCrumb pageTitle="Candidate Manifest Review" />
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{manifestId}</h1>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Approve or reject candidates before verified dataset promotion.</p>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Approve, reject, or correct raw candidates. Promotion into datasets/training/* remains a separate guarded phase.</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>Refresh</Button>
       </div>
@@ -1248,27 +1383,70 @@ export function MLVerifiedPromotionManifestDetailPage() {
       {success ? <InlineSuccess message={success} /> : null}
       {manifest ? (
         <div className="grid gap-4 md:grid-cols-4">
-          <SummaryCard label="Candidates" value={manifest.candidate_count} />
+          <SummaryCard label="Candidates" value={total} />
           <SummaryCard label="Approved" value={countFor(manifest, "approved")} />
           <SummaryCard label="Rejected" value={countFor(manifest, "rejected")} />
           <SummaryCard label="Pending" value={countFor(manifest, "pending")} />
         </div>
       ) : null}
-      <Panel title="Validation & Apply">
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
-          Apply writes approved samples to datasets/verified/*. Pending and rejected candidates are never promoted.
+      <Panel title="Vision Labeling">
+        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200">
+          Vision suggestions assist review, not replace it. Suggestions never auto-approve or auto-promote candidates.
+        </div>
+        <div className="mb-4 grid gap-3 md:grid-cols-3">
+          <SummaryCard label="OpenAI" value={openaiEnabled ? "Enabled" : "Disabled"} detail={openaiEnabled ? "gpt-4.1-mini" : "OPENAI_API_KEY missing"} />
+          <SummaryCard label="DeepSeek" value={deepseekEnabled ? "Enabled" : "Disabled"} detail={providers?.providers?.find((p) => p.name === "deepseek")?.disabled_reason || "No image endpoint"} />
+          <SummaryCard label="Suggestions" value="Manual only" detail="Dashboard-initiated, never auto-run" />
+        </div>
+        <div className="mb-4 flex flex-wrap gap-3">
+          <select value={visionProvider} onChange={(event) => setVisionProvider(event.target.value)} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white">
+            {openaiEnabled ? <option value="openai">OpenAI (gpt-4.1-mini)</option> : null}
+            {deepseekEnabled ? <option value="deepseek">DeepSeek (deepseek-chat)</option> : null}
+            {!openaiEnabled && !deepseekEnabled ? <option value="">No provider enabled</option> : null}
+          </select>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => void runPanelAction("validate")}>Validate Manifest</Button>
-          <Button variant="outline" size="sm" onClick={() => void runPanelAction("dry-run")} disabled={approvedCount === 0}>Dry-run Promotion</Button>
-          <Button size="sm" onClick={() => setApplyConfirmOpen(true)} disabled={!applyAllowed}>Apply Approved Promotion</Button>
+          <Button variant="outline" size="sm" onClick={() => void runVisionEstimate()} disabled={!openaiEnabled && !deepseekEnabled || visionEstimateLoading}>
+            {visionEstimateLoading ? "Estimating..." : "Estimate Vision Labels"}
+          </Button>
+          {visionEstimate ? (
+            <Button size="sm" onClick={() => setVisionConfirmOpen(true)} disabled={!openaiEnabled && !deepseekEnabled || visionJobLoading || visionEstimate.blocked}>
+              {visionJobLoading ? "Creating..." : "Create Vision Label Job"}
+            </Button>
+          ) : null}
         </div>
-        {applyBlockedReason ? <div className="mt-3 text-sm text-amber-700 dark:text-amber-300">Apply blocked: {applyBlockedReason}</div> : null}
-        {report ? (
-          <div className="mt-4">
-            {report.mode ? <PromotionReportPreview report={report} manifest={manifest} /> : <JsonPreview value={report} />}
+        {visionEstimate ? (
+          <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-900">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Estimate</h3>
+            <div className="mt-2 grid gap-2 text-sm text-gray-700 dark:text-gray-300 md:grid-cols-3">
+              <div><span className="font-medium">Candidates:</span> {visionEstimate.candidate_count}</div>
+              <div><span className="font-medium">Cost:</span> ${visionEstimate.estimated_cost.low.toFixed(3)}–${visionEstimate.estimated_cost.high.toFixed(3)} USD</div>
+              <div><span className="font-medium">Confirmation:</span> {visionEstimate.requires_confirmation ? "Required" : "Not required"}</div>
+            </div>
+            {visionEstimate.blocked ? (
+              <div className="mt-2 text-sm text-red-600 dark:text-red-400">Blocked: {visionEstimate.blocked_reason}</div>
+            ) : null}
           </div>
         ) : null}
+      </Panel>
+      <Panel title="Promotion Guardrails">
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+          Promotion writes approved candidates to datasets/training/*. Pending candidates block apply. Rejected candidates are never promoted.
+        </div>
+        <div className="mb-4 flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => void runPromotionDryRun()} disabled={promotionLoading || approvedCount === 0}>
+            {promotionLoading ? "Working..." : "Dry-run Promotion"}
+          </Button>
+          <Button size="sm" onClick={() => setApplyConfirmOpen(true)} disabled={promotionLoading || !applyAllowed}>
+            Apply Approved Promotion
+          </Button>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <SummaryCard label="Approved" value={approvedCount} />
+          <SummaryCard label="Promotion" value={applyAllowed ? "Apply Ready" : "Guarded"} detail={applyAllowed ? "Exact confirmation required" : "Run a valid dry-run first"} />
+          <SummaryCard label="Target" value="datasets/training/*" detail="Copy only, never move" />
+        </div>
+        {promotionResult ? <TrainingPromotionPreview result={promotionResult} /> : null}
       </Panel>
       <Panel title="Candidates">
         <div className="mb-4 flex flex-wrap gap-3">
@@ -1278,10 +1456,12 @@ export function MLVerifiedPromotionManifestDetailPage() {
           <select value={reviewStatus} onChange={(event) => { setOffset(0); setReviewStatus(event.target.value); }} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white">
             <option value="">All statuses</option><option value="pending">pending</option><option value="approved">approved</option><option value="rejected">rejected</option>
           </select>
+          <select value={caseGroup} onChange={(event) => { setOffset(0); setCaseGroup(event.target.value); }} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white">
+            <option value="">All case groups</option><option value="LOWER_CASE">LOWER_CASE</option><option value="UPPER_CASE">UPPER_CASE</option>
+          </select>
           <input value={label} onChange={(event) => { setOffset(0); setLabel(event.target.value); }} placeholder="Label" className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white" />
-          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"><input type="checkbox" checked={priorityOnly} onChange={(event) => { setOffset(0); setPriorityOnly(event.target.checked); }} /> Priority only</label>
           <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"><input type="checkbox" checked={conflictOnly} onChange={(event) => { setOffset(0); setConflictOnly(event.target.checked); }} /> Conflicts</label>
-          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"><input type="checkbox" checked={problemOnly} onChange={(event) => { setOffset(0); setProblemOnly(event.target.checked); }} /> Problems</label>
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"><input type="checkbox" checked={duplicateOnly} onChange={(event) => { setOffset(0); setDuplicateOnly(event.target.checked); }} /> Duplicates</label>
         </div>
         <div className="mb-4 flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => setVisibleUpdateConfirm({ ids: selectedCandidateIds, status: "approved" })} disabled={selectedCandidateIds.length === 0}>Approve Selected</Button>
@@ -1291,40 +1471,62 @@ export function MLVerifiedPromotionManifestDetailPage() {
         </div>
         <div className="space-y-3">
           {candidates.map((candidate) => (
-            <div key={candidate.candidate_id} className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/[0.03]">
+            <div key={candidate.id} className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/[0.03]">
               <div className="flex flex-col gap-4 md:flex-row">
-                <CandidatePreview manifestId={manifestId} candidate={candidate} />
+                <CandidatePreview candidate={candidate} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <input
                       type="checkbox"
-                      checked={selectedIds.has(candidate.candidate_id)}
+                      checked={selectedIds.has(candidate.id)}
                       onChange={(event) => {
                         setSelectedIds((previous) => {
                           const next = new Set(previous);
-                          if (event.target.checked) next.add(candidate.candidate_id);
-                          else next.delete(candidate.candidate_id);
+                          if (event.target.checked) next.add(candidate.id);
+                          else next.delete(candidate.id);
                           return next;
                         });
                       }}
                     />
                     <StatusPill status={candidate.review_status} />
-                    {candidate.label_conflict ? <StatusPill status="conflict" /> : null}
-                    <span className="font-semibold text-gray-900 dark:text-white">{candidate.language} / {candidate.canonical_label}</span>
+                    {candidate.quality_flags?.label_conflict ? <StatusPill status="conflict" /> : null}
+                    <span className="font-semibold text-gray-900 dark:text-white">{candidate.language_code} / {candidate.final_case_group || candidate.suggested_case_group || "-"} / {candidate.final_label || candidate.suggested_label || candidate.raw_label || "-"}</span>
                     <span className="text-xs text-gray-500 dark:text-gray-400">{candidate.source_type}</span>
                   </div>
                   <div className="mt-2 break-all text-xs text-gray-500 dark:text-gray-400">{candidate.source_key}</div>
                   <div className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-                    prediction {candidate.model_prediction || "-"} · confidence {candidate.confidence ?? "-"} · {candidate.width}x{candidate.height}
+                    vision {candidate.vision_status || "not_requested"} · confidence {candidate.vision_confidence ?? "-"}
+                    {candidate.suggested_label ? (
+                      <span className="ml-2 rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-500/20 dark:text-blue-200">
+                        AI: {candidate.suggested_case_group}/{candidate.suggested_label}
+                      </span>
+                    ) : null}
+                    {candidate.vision_suggestion ? (
+                      <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">
+                        {((candidate.vision_suggestion as Record<string, unknown>)?.review_recommendation as string) || ""}
+                      </span>
+                    ) : null}
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1">
-                    {(candidate.reason_for_inclusion || []).map((reason) => <span key={reason} className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300">{reason}</span>)}
+                    {Object.entries(candidate.quality_flags || {}).filter(([, value]) => Boolean(value)).map(([flag]) => <span key={flag} className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300">{flag}</span>)}
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-row gap-2 md:flex-col">
-                  <Button size="sm" variant="outline" onClick={() => void updateVisible("approved", [candidate.candidate_id], true)}>Approve</Button>
-                  <Button size="sm" variant="outline" onClick={() => void updateVisible("rejected", [candidate.candidate_id], true)}>Reject</Button>
-                  <Button size="sm" variant="outline" onClick={() => void updateVisible("pending", [candidate.candidate_id], true)}>Pending</Button>
+                  <Button size="sm" variant="outline" onClick={() => void updateVisible("approved", [candidate.id], true)}>Approve</Button>
+                  <Button size="sm" variant="outline" onClick={() => void updateVisible("rejected", [candidate.id], true)}>Reject</Button>
+                  <Button size="sm" variant="outline" onClick={() => void updateVisible("pending", [candidate.id], true)}>Pending</Button>
+                  {(openaiEnabled || deepseekEnabled) ? (
+                    <>
+                      <Button size="sm" variant="outline" onClick={() => void runSingleSuggestion(candidate.id)} disabled={suggestingId === candidate.id}>
+                        {suggestingId === candidate.id ? "..." : "Suggest"}
+                      </Button>
+                      {candidate.vision_status === "completed" && candidate.suggested_label ? (
+                        <Button size="sm" variant="outline" onClick={() => void runUseSuggestion(candidate.id)} disabled={usingSuggestionId === candidate.id}>
+                          {usingSuggestionId === candidate.id ? "..." : "Use Suggestion"}
+                        </Button>
+                      ) : null}
+                    </>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -1351,29 +1553,28 @@ export function MLVerifiedPromotionManifestDetailPage() {
       <Modal
         isOpen={applyConfirmOpen}
         onClose={() => {
-          setApplyConfirmOpen(false);
-          setApplyConfirmationText("");
+          if (!promotionLoading) {
+            setApplyConfirmOpen(false);
+            setApplyConfirmationText("");
+          }
         }}
-        title="Apply verified promotion"
+        title="Apply training dataset promotion"
         maxWidth="md"
-        showCloseButton={!loading}
+        showCloseButton={!promotionLoading}
       >
         <div className="space-y-4">
           <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
-            This writes approved samples to datasets/verified/*. Pending and rejected candidates are not promoted.
+            This copies approved candidate images into datasets/training/*. It does not run training.
           </div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Type exactly <span className="font-mono">APPLY {manifestId}</span>
+            Type exactly <span className="font-mono">PROMOTE {manifestId}</span>
           </label>
           <input
             value={applyConfirmationText}
             onChange={(event) => setApplyConfirmationText(event.target.value)}
-            placeholder={`APPLY ${manifestId}`}
+            placeholder={`PROMOTE ${manifestId}`}
             className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
           />
-          {applyConfirmationText !== `APPLY ${manifestId}` ? (
-            <div className="mt-1 text-xs text-red-600 dark:text-red-300">Confirmation text must exactly match APPLY {manifestId}.</div>
-          ) : null}
           <div className="flex justify-end gap-2">
             <Button
               variant="outline"
@@ -1382,20 +1583,416 @@ export function MLVerifiedPromotionManifestDetailPage() {
                 setApplyConfirmOpen(false);
                 setApplyConfirmationText("");
               }}
-              disabled={loading}
+              disabled={promotionLoading}
             >
               Cancel
             </Button>
             <Button
               size="sm"
-              onClick={() => void runPanelAction("apply")}
-              disabled={loading || applyConfirmationText !== `APPLY ${manifestId}`}
+              onClick={() => void runPromotionApply()}
+              disabled={promotionLoading || applyConfirmationText !== `PROMOTE ${manifestId}`}
             >
               Apply Promotion
             </Button>
           </div>
         </div>
       </Modal>
+      <Modal
+        isOpen={visionConfirmOpen}
+        onClose={() => {
+          if (!visionJobLoading) {
+            setVisionConfirmOpen(false);
+            setVisionConfirmationText("");
+          }
+        }}
+        title="Create Vision Label Job"
+        maxWidth="md"
+        showCloseButton={!visionJobLoading}
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+            This sends candidate images to OpenAI for handwriting label suggestions. Estimated cost: ${visionEstimate?.estimated_cost.low.toFixed(3)}–${visionEstimate?.estimated_cost.high.toFixed(3)} USD.
+            Suggestions do not approve or promote candidates.
+          </div>
+          {visionEstimate?.requires_confirmation ? (
+            <>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Type exactly <span className="font-mono">VISION LABEL {manifestId}</span>
+              </label>
+              <input
+                value={visionConfirmationText}
+                onChange={(event) => setVisionConfirmationText(event.target.value)}
+                placeholder={`VISION LABEL ${manifestId}`}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+              />
+            </>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setVisionConfirmOpen(false);
+                setVisionConfirmationText("");
+              }}
+              disabled={visionJobLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => void runVisionJob()}
+              disabled={
+                visionJobLoading ||
+                (visionEstimate?.requires_confirmation === true &&
+                  visionConfirmationText !== `VISION LABEL ${manifestId}`)
+              }
+            >
+              Create Vision Job
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+export function MLVisionJobsPage() {
+  const [jobs, setJobs] = useState<Array<Record<string, unknown>>>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [providerFilter, setProviderFilter] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [providers, setProviders] = useState<VisionProvidersResponse | null>(null);
+  const limit = 20;
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [providersResult] = await Promise.all([
+        getHandwritingVisionProviders().catch(() => ({ providers: [] })),
+      ]);
+      setProviders(providersResult);
+      const { listHandwritingVisionJobs } = await import("@/lib/adminMlApi");
+      const result = await listHandwritingVisionJobs({
+        status: statusFilter || undefined,
+        provider: providerFilter || undefined,
+        limit,
+        offset,
+      });
+      setJobs(result.items.map((item) => ({ ...item })));
+      setTotal(result.total);
+    } catch (err: any) {
+      setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to load vision jobs.");
+    } finally {
+      setLoading(false);
+    }
+  }, [limit, offset, statusFilter, providerFilter]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const handleCancel = useCallback(async (jobId: string) => {
+    setError(null);
+    setSuccess(null);
+    try {
+      const { cancelHandwritingVisionJob } = await import("@/lib/adminMlApi");
+      await cancelHandwritingVisionJob(jobId);
+      setSuccess(`Vision job ${jobId} cancelled.`);
+      await refresh();
+    } catch (err: any) {
+      setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to cancel job.");
+    }
+  }, [refresh]);
+
+  const handlePoll = useCallback(async (jobId: string) => {
+    setError(null);
+    setSuccess(null);
+    try {
+      const result = await pollHandwritingVisionJob(jobId);
+      setSuccess(`Poll: ${result.status}${result.message ? ` - ${result.message}` : ""}`);
+      await refresh();
+    } catch (err: any) {
+      setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to poll job.");
+    }
+  }, [refresh]);
+
+  const handleImport = useCallback(async (jobId: string) => {
+    setError(null);
+    setSuccess(null);
+    try {
+      const result = await importHandwritingVisionJobResults(jobId);
+      setSuccess(`Import: ${result.completed_count ?? 0} completed, ${result.failed_count ?? 0} failed`);
+      await refresh();
+    } catch (err: any) {
+      setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to import results.");
+    }
+  }, [refresh]);
+
+  return (
+    <div className="space-y-6 p-6">
+      <PageBreadCrumb pageTitle="Vision Label Jobs" />
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Vision Label Jobs</h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Vision model labeling jobs for handwriting candidate review.</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>Refresh</Button>
+      </div>
+      {error ? <InlineError message={error} /> : null}
+      {success ? <InlineSuccess message={success} /> : null}
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/[0.03]">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Providers</h3>
+          <div className="mt-2 space-y-2">
+            {providers?.providers?.map((p) => (
+              <div key={p.name} className="flex items-center gap-2 text-sm">
+                <StatusPill status={p.enabled ? "approved" : "rejected"} />
+                <span className="font-medium text-gray-900 dark:text-white">{p.name}</span>
+                <span className="text-gray-500 dark:text-gray-400">
+                  {p.enabled ? `model: ${p.default_model}` : p.disabled_reason}
+                </span>
+              </div>
+            )) || <div className="text-sm text-gray-500 dark:text-gray-400">Loading providers...</div>}
+          </div>
+        </div>
+        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/[0.03]">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Info</h3>
+          <div className="mt-2 space-y-1 text-sm text-gray-700 dark:text-gray-300">
+            <p>Suggestions assist review, never auto-approve.</p>
+            <p>Batch mode preferred for cost savings (50% discount).</p>
+            <p>Sync mode available for single-candidate suggestions.</p>
+          </div>
+        </div>
+      </div>
+      <Panel title="Jobs">
+        <div className="mb-4 flex flex-wrap gap-3">
+          <select value={statusFilter} onChange={(event) => { setOffset(0); setStatusFilter(event.target.value); }} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white">
+            <option value="">All statuses</option>
+            <option value="queued">queued</option>
+            <option value="running">running</option>
+            <option value="completed">completed</option>
+            <option value="failed">failed</option>
+            <option value="cancelled">cancelled</option>
+          </select>
+          <select value={providerFilter} onChange={(event) => { setOffset(0); setProviderFilter(event.target.value); }} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white">
+            <option value="">All providers</option>
+            <option value="openai">openai</option>
+            <option value="deepseek">deepseek</option>
+          </select>
+        </div>
+        <div className="space-y-3">
+          {jobs.map((job) => (
+            <div key={String(job.id)} className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/[0.03]">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusPill status={String(job.status)} />
+                <span className="font-semibold text-gray-900 dark:text-white">{String(job.provider)} / {String(job.model)}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">{String(job.mode)}</span>
+                {job.manifest_id ? <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300">{String(job.manifest_id).slice(0, 8)}...</span> : null}
+              </div>
+              <div className="mt-2 grid gap-2 text-sm text-gray-700 dark:text-gray-300 md:grid-cols-3">
+                <div><span className="font-medium">Requested:</span> {Number(job.request_count)}</div>
+                <div><span className="font-medium">Completed:</span> {Number(job.completed_count)}</div>
+                <div><span className="font-medium">Failed:</span> {Number(job.failed_count)}</div>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {job.created_at ? <span className="text-xs text-gray-500 dark:text-gray-400">Created: {formatDate(String(job.created_at))}</span> : null}
+                {job.completed_at ? <span className="text-xs text-gray-500 dark:text-gray-400">Completed: {formatDate(String(job.completed_at))}</span> : null}
+              </div>
+              {job.error_message ? (
+                <div className="mt-2 rounded bg-red-100 p-2 text-xs text-red-800 dark:bg-red-500/20 dark:text-red-200">{String(job.error_message)}</div>
+              ) : null}
+              {job.provider_batch_id ? (
+                <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">Batch: {String(job.provider_batch_id).slice(0, 30)}...</div>
+              ) : null}
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Link href={`/system/ml-training/vision-jobs/${String(job.id)}`} className="inline-flex items-center justify-center font-medium gap-2 rounded-lg transition px-4 py-2 text-xs bg-brand-500 text-white shadow-theme-xs hover:bg-brand-600">View</Link>
+                {String(job.status) === "queued" || String(job.status) === "running" ? (
+                  <Button size="sm" variant="outline" onClick={() => void handleCancel(String(job.id))}>Cancel</Button>
+                ) : null}
+                {String(job.status) === "queued" || String(job.status) === "running" ? (
+                  <Button size="sm" variant="outline" onClick={() => void handlePoll(String(job.id))}>Poll</Button>
+                ) : null}
+                {(String(job.status) === "completed" || String(job.status) === "running") && job.provider_batch_id ? (
+                  <Button size="sm" variant="outline" onClick={() => void handleImport(String(job.id))}>Import Results</Button>
+                ) : null}
+              </div>
+            </div>
+          ))}
+          {loading ? <LoadingBlock /> : null}
+          {!loading && jobs.length === 0 ? <div className="text-sm text-gray-500 dark:text-gray-400">No vision jobs found.</div> : null}
+        </div>
+        <div className="mt-4">
+          <Pagination currentPage={Math.floor(offset / limit) + 1} totalPages={Math.max(1, Math.ceil(total / limit))} onPageChange={(page) => setOffset((page - 1) * limit)} />
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+export function MLVisionJobDetailPage() {
+  const params = useParams<{ id: string }>();
+  const jobId = String(params?.id || "");
+  const [job, setJob] = useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (!jobId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await getHandwritingVisionJob(jobId);
+      setJob(result as unknown as Record<string, unknown>);
+    } catch (err: any) {
+      setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to load job.");
+    } finally {
+      setLoading(false);
+    }
+  }, [jobId]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const handlePoll = useCallback(async () => {
+    setError(null);
+    try {
+      const result = await pollHandwritingVisionJob(jobId);
+      setSuccess(`Poll: ${result.status}${result.message ? ` - ${result.message}` : ""}`);
+      await refresh();
+    } catch (err: any) {
+      setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to poll.");
+    }
+  }, [jobId, refresh]);
+
+  const handleImport = useCallback(async () => {
+    setError(null);
+    try {
+      const result = await importHandwritingVisionJobResults(jobId);
+      setSuccess(`Import: ${result.completed_count ?? 0} completed, ${result.failed_count ?? 0} failed`);
+      await refresh();
+    } catch (err: any) {
+      setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to import.");
+    }
+  }, [jobId, refresh]);
+
+  const handleCancel = useCallback(async () => {
+    setError(null);
+    try {
+      const { cancelHandwritingVisionJob } = await import("@/lib/adminMlApi");
+      await cancelHandwritingVisionJob(jobId);
+      setSuccess("Job cancelled.");
+      await refresh();
+    } catch (err: any) {
+      setError(err?.response?.data?.detail?.message ?? err?.message ?? "Unable to cancel.");
+    }
+  }, [jobId, refresh]);
+
+  const items = (Array.isArray(job?.items) ? job.items : []) as Array<Record<string, unknown>>;
+
+  return (
+    <div className="space-y-6 p-6">
+      <PageBreadCrumb pageTitle="Vision Job Detail" />
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            <Link href="/system/ml-training/vision-jobs" className="text-brand-500 hover:underline">Vision Jobs</Link>
+            {" / "}{jobId.slice(0, 8)}...
+          </h1>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>Refresh</Button>
+          {String(job?.status) === "queued" || String(job?.status) === "running" ? (
+            <Button variant="outline" size="sm" onClick={() => void handlePoll()}>Poll</Button>
+          ) : null}
+          {(String(job?.status) === "completed" || String(job?.status) === "running") && job?.provider_batch_id ? (
+            <Button variant="outline" size="sm" onClick={() => void handleImport()}>Import Results</Button>
+          ) : null}
+          {String(job?.status) === "queued" || String(job?.status) === "running" ? (
+            <Button variant="outline" size="sm" onClick={() => void handleCancel()}>Cancel</Button>
+          ) : null}
+        </div>
+      </div>
+      {error ? <InlineError message={error} /> : null}
+      {success ? <InlineSuccess message={success} /> : null}
+      {loading ? <LoadingBlock /> : null}
+      {!loading && job ? (
+        <>
+          <div className="grid gap-4 md:grid-cols-4">
+            <SummaryCard label="Status" value={String(job.status)} />
+            <SummaryCard label="Provider" value={`${String(job.provider)} / ${String(job.model)}`} />
+            <SummaryCard label="Mode" value={String(job.mode)} />
+            <SummaryCard label="Requested" value={String(job.request_count)} />
+            <SummaryCard label="Completed" value={String(job.completed_count)} />
+            <SummaryCard label="Failed" value={String(job.failed_count)} />
+            <SummaryCard label="Created" value={formatDate(String(job.created_at || ""))} />
+            <SummaryCard label="Completed at" value={formatDate(String(job.completed_at || null))} />
+          </div>
+          {job.manifest_id ? (
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Manifest: <Link href={`/system/ml-training/manifests/${String(job.manifest_id)}`} className="text-brand-500 hover:underline">{String(job.manifest_id)}</Link>
+            </div>
+          ) : null}
+          {job.provider_batch_id ? (
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              OpenAI Batch: <span className="font-mono">{String(job.provider_batch_id)}</span>
+            </div>
+          ) : null}
+          {job.estimated_cost ? (
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Estimated cost: ${String((job.estimated_cost as Record<string, unknown>)?.low ?? "-")}–${String((job.estimated_cost as Record<string, unknown>)?.high ?? "-")} USD
+            </div>
+          ) : null}
+          {job.error_message ? (
+            <div className="rounded bg-red-100 p-3 text-sm text-red-800 dark:bg-red-500/20 dark:text-red-200">{String(job.error_message)}</div>
+          ) : null}
+
+          <Panel title={`Items (${items.length})`}>
+            <div className="space-y-2">
+              {items.map((item) => {
+                const suggestion = item.parsed_suggestion as Record<string, unknown> | undefined;
+                return (
+                  <div key={String(item.id)} className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-white/[0.03]">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusPill status={String(item.status)} />
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">
+                        Candidate: {String(item.candidate_id).slice(0, 8)}...
+                      </span>
+                      {job.manifest_id ? (
+                        <Link href={`/system/ml-training/manifests/${String(job.manifest_id)}`} className="text-xs text-brand-500 hover:underline">
+                          View in manifest
+                        </Link>
+                      ) : null}
+                    </div>
+                    {suggestion ? (
+                      <div className="mt-2 grid gap-1 text-sm text-gray-700 dark:text-gray-300 md:grid-cols-3">
+                        <div>Label: <span className="font-medium">{String(suggestion.predicted_label ?? "-")}</span></div>
+                        <div>Case: <span className="font-medium">{String(suggestion.case_group ?? "-")}</span></div>
+                        <div>Confidence: <span className="font-medium">{String(suggestion.confidence ?? "-")}</span></div>
+                        <div className="md:col-span-2">Recommendation: <span className="font-medium">{String(suggestion.review_recommendation ?? "-")}</span></div>
+                        <div>Reason: <span className="text-xs">{String(suggestion.reason ?? "-")}</span></div>
+                      </div>
+                    ) : item.status === "failed" && item.error_message ? (
+                      <div className="mt-2 rounded bg-red-100 p-2 text-xs text-red-800 dark:bg-red-500/20 dark:text-red-200">{String(item.error_message)}</div>
+                    ) : null}
+                  </div>
+                );
+              })}
+              {items.length === 0 ? (
+                <div className="text-sm text-gray-500 dark:text-gray-400">No items found.</div>
+              ) : null}
+            </div>
+          </Panel>
+        </>
+      ) : null}
+      {!loading && !job ? <div className="text-sm text-gray-500 dark:text-gray-400">Job not found.</div> : null}
     </div>
   );
 }

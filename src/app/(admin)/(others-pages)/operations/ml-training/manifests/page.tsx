@@ -1,3 +1,3 @@
-import { MLVerifiedPromotionManifestsPage } from "@/components/admin/ml-training/MLTrainingViews";
+import { MLCandidateReviewManifestsPage } from "@/components/admin/ml-training/MLTrainingViews";
 
-export default MLVerifiedPromotionManifestsPage;
+export default MLCandidateReviewManifestsPage;

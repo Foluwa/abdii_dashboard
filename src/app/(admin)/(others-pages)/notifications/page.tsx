@@ -29,7 +29,7 @@ export default function NotificationsPage() {
     failed: number;
   } | null>(null);
 
-  const { data: usersData } = useUsers({ limit: 200 });
+  const { users: usersData } = useUsers({ limit: 200 });
 
   const handleSend = useCallback(async () => {
     if (!title.trim() || !body.trim()) {
