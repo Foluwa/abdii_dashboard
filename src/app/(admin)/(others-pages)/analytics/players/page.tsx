@@ -114,9 +114,8 @@ export default function PlayerAnalyticsPage() {
   };
 
   const tabs = [
-    { name: 'Overview', href: '/analytics', active: false },
-    { name: 'Players', href: '/analytics/players', active: true },
-    { name: 'Curriculum Ops', href: '/analytics/curriculum-ops', active: false },
+    { name: 'Overview', href: '/reports/game-analytics', active: false },
+    { name: 'Players', href: '/reports/player-analytics', active: true },
   ];
 
   if (isError) {

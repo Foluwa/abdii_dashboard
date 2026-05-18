@@ -226,6 +226,8 @@ describe('UserLearningStatePage', () => {
   // ===== Phase 19 safety + observability tests =====
 
   it('confirm modal cancellation prevents reset API call', async () => {
+    // User clicks Cancel in the browser confirm dialog
+    window.confirm = jest.fn(() => false);
     mockUseAdminUserLearningState.mockReturnValue({
       state: { user_id: 'test-user-uuid-1234', courses: [sampleCourse] },
       isLoading: false,
@@ -235,16 +237,16 @@ describe('UserLearningStatePage', () => {
 
     render(<UserLearningStatePage />);
     fireEvent.click(screen.getByText('Reset Progress'));
-    expect(screen.getByText('Reset course progress')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Cancel'));
 
     await waitFor(() => {
-      expect(screen.queryByText('Reset course progress')).not.toBeInTheDocument();
+      expect(window.confirm).toHaveBeenCalledTimes(1);
+      // API must NOT have been called
       expect(mockAdminResetCourseProgress).not.toHaveBeenCalled();
     });
   });
 
   it('confirm modal confirmation calls reset API and then refetch', async () => {
+    window.confirm = jest.fn(() => true);
     mockAdminResetCourseProgress.mockResolvedValueOnce({ ok: true });
     mockUseAdminUserLearningState.mockReturnValue({
       state: { user_id: 'test-user-uuid-1234', courses: [sampleCourse] },
@@ -255,7 +257,6 @@ describe('UserLearningStatePage', () => {
 
     render(<UserLearningStatePage />);
     fireEvent.click(screen.getByText('Reset Progress'));
-    fireEvent.click(screen.getAllByRole('button', { name: 'Reset Progress' }).slice(-1)[0]);
 
     await waitFor(() => {
       expect(mockAdminResetCourseProgress).toHaveBeenCalledWith(
@@ -291,6 +292,7 @@ describe('UserLearningStatePage', () => {
   });
 
   it('shows toast notification after successful reset', async () => {
+    window.confirm = jest.fn(() => true);
     mockAdminResetCourseProgress.mockResolvedValueOnce({ ok: true });
     mockUseAdminUserLearningState.mockReturnValue({
       state: { user_id: 'test-user-uuid-1234', courses: [sampleCourse] },
@@ -301,7 +303,6 @@ describe('UserLearningStatePage', () => {
 
     render(<UserLearningStatePage />);
     fireEvent.click(screen.getByText('Reset Progress'));
-    fireEvent.click(screen.getAllByRole('button', { name: 'Reset Progress' }).slice(-1)[0]);
 
     await waitFor(() => {
       expect(screen.getByText(/Progress reset successfully/i)).toBeInTheDocument();

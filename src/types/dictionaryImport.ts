@@ -97,7 +97,6 @@ export interface DictionaryImportBatchListItem {
   source_name?: string | null;
   pair_code?: string | null;
   file_hash: string;
-  validated_count: number;
   inserted_count: number;
   updated_count: number;
   skipped_count: number;

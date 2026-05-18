@@ -13,10 +13,6 @@ import axios, { AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig } fro
 // Get API base URL from environment variable
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
-function shouldUseAdminProxy(url?: string) {
-  return !!url && (url.startsWith('/api/v1/admin/') || url.startsWith('/api/admin/'));
-}
-
 /**
  * Main API client instance
  */
@@ -43,16 +39,6 @@ function buildIdempotencyKey() {
  */
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    if (shouldUseAdminProxy(config.url)) {
-      if (config.url?.startsWith('/api/v1/admin/')) {
-        config.url = config.url.replace('/api/v1/admin/', '/api/admin/');
-      }
-
-      // Rewritten admin requests must target the Next.js same-origin proxy,
-      // not the backend base URL where /api/admin/* does not exist.
-      config.baseURL = undefined;
-    }
-
     if (process.env.NODE_ENV === 'development') {
       console.log('🔵 API REQUEST:', {
         method: config.method?.toUpperCase(),
@@ -68,6 +54,13 @@ apiClient.interceptors.request.use(
     const accessToken = sessionStorage.getItem('access_token');
     if (accessToken) {
       config.headers['Authorization'] = `Bearer ${accessToken}`;
+    }
+
+    // Monitoring/admin tooling endpoints use a separate x-admin-token header,
+    // which is NOT the JWT. It should be configured via env.
+    const adminMonitoringToken = process.env.NEXT_PUBLIC_ADMIN_MONITORING_TOKEN;
+    if (adminMonitoringToken && config.url?.startsWith('/api/v1/admin/')) {
+      config.headers['x-admin-token'] = adminMonitoringToken;
     }
 
     const method = config.method?.toLowerCase();
@@ -124,15 +117,13 @@ apiClient.interceptors.response.use(
     
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
 
-    // If the backend or proxy is explicitly telling us the admin monitoring token
-    // is invalid, this is unrelated to the JWT access token. Do NOT try to refresh JWTs.
-    const isInvalidAdminToken =
-      (error.response?.status === 401 &&
-        (error.response.data as any)?.detail === 'Invalid admin token') ||
-      (error.response?.status === 502 &&
-        (error.response.data as any)?.error?.type === 'proxy_error');
-    if (isInvalidAdminToken) {
-      console.warn('⚠️ Invalid admin monitoring token or proxy error; skipping JWT refresh.');
+    // If the backend is explicitly telling us the admin monitoring token is invalid,
+    // this is unrelated to the JWT access token. Do NOT try to refresh JWTs for this.
+    if (
+      error.response?.status === 401 &&
+      (error.response.data as any)?.detail === 'Invalid admin token'
+    ) {
+      console.warn('⚠️ Invalid admin monitoring token; skipping JWT refresh.');
       return Promise.reject(error);
     }
 

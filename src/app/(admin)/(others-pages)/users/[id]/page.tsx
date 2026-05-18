@@ -42,9 +42,12 @@ export default function UserDetailPage() {
     setActionError(null);
     
     try {
+      const token = localStorage.getItem("admin_token");
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+      
       let endpoint = "";
-      let method: "post" | "delete" = "post";
-
+      let method = "POST";
+      
       switch (action) {
         case "deactivate":
           endpoint = `/api/v1/admin/users/${userId}/deactivate`;
@@ -54,21 +57,25 @@ export default function UserDetailPage() {
           break;
         case "delete":
           endpoint = `/api/v1/admin/users/${userId}`;
-          method = "delete";
+          method = "DELETE";
           break;
         case "purge":
           endpoint = `/api/v1/admin/users/${userId}/purge`;
-          method = "delete";
+          method = "DELETE";
           break;
       }
-
-      const { default: apiClient } = await import("@/lib/api");
-      const response = method === "delete"
-        ? await apiClient.delete(endpoint)
-        : await apiClient.post(endpoint);
-
-      if (response.status < 200 || response.status >= 300) {
-        throw new Error(response.data?.detail || "Action failed");
+      
+      const response = await fetch(`${baseUrl}${endpoint}`, {
+        method,
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || "Action failed");
       }
       
       // Close modal

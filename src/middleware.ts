@@ -38,26 +38,6 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // Protect admin routes from unauthenticated access server-side
-  const isAdminRoute = pathname === '/dashboard' ||
-    pathname.startsWith('/content/') ||
-    pathname.startsWith('/curriculum/') ||
-    pathname.startsWith('/media/') ||
-    pathname.startsWith('/reports/') ||
-    pathname.startsWith('/community/') ||
-    pathname.startsWith('/subscriptions/') ||
-    pathname.startsWith('/notifications/') ||
-    pathname.startsWith('/settings/') ||
-    pathname.startsWith('/operations/') ||
-    pathname.startsWith('/system/') ||
-    pathname.startsWith('/analytics/') ||
-    pathname.startsWith('/enforcement');
-
-  if (isAdminRoute && !isAuthenticated) {
-    console.log('🛡️ MIDDLEWARE: Unauthenticated access to admin route, redirecting to signin');
-    return NextResponse.redirect(new URL('/signin', request.url));
-  }
-
   // Allow all other requests to proceed
   // Protected route checks are handled client-side by useRequireAuth
   return NextResponse.next();

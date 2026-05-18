@@ -18,11 +18,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function buildUserCookie(user: User): string {
-  const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:';
-  return `user=${encodeURIComponent(JSON.stringify(user))}; path=/; SameSite=Strict${isSecure ? '; Secure' : ''}`;
-}
-
 /**
  * Auth Provider Component
  * Manages authentication state and user session
@@ -178,9 +173,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       sessionStorage.setItem('user', JSON.stringify(userData));
       sessionStorage.setItem('token_expiry', expiryTime.toString());
 
-      // Set a client-side cookie for middleware detection.
-      // Secure cookies do not persist on local http:// development origins.
-      document.cookie = buildUserCookie(userData);
+      // Set a client-side cookie for middleware detection (session cookie)
+      document.cookie = `user=${encodeURIComponent(JSON.stringify(userData))}; path=/; SameSite=Strict; Secure`;
 
       // Update state
       setUser(userData);
