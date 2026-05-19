@@ -236,11 +236,13 @@ function generateId(prefix: string): string {
 
 function getStepValidationCounts(validation: import('@/types/curriculum').ValidationResultPayload | null | undefined) {
   const errorsByStep = new Map<number, { errors: number; warnings: number }>();
+  const errorsByPair = new Map<string, { errors: number; warnings: number }>();
+  const errorsByOption = new Map<string, { errors: number; warnings: number }>();
   const allIssues = [...(validation?.errors ?? []), ...(validation?.warnings ?? [])];
   allIssues.forEach((issue) => {
-    const match = (issue.path || '').match(/^steps\[(\d+)\]/);
-    if (match) {
-      const stepIndex = Number(match[1]);
+    const stepMatch = (issue.path || '').match(/^steps\[(\d+)\]/);
+    if (stepMatch) {
+      const stepIndex = Number(stepMatch[1]);
       const existing = errorsByStep.get(stepIndex) || { errors: 0, warnings: 0 };
       if (issue.severity === 'ERROR') {
         existing.errors += 1;
@@ -249,8 +251,30 @@ function getStepValidationCounts(validation: import('@/types/curriculum').Valida
       }
       errorsByStep.set(stepIndex, existing);
     }
+    const pairMatch = (issue.path || '').match(/^steps\[(\d+)\]\.pairs\[(\d+)\]/);
+    if (pairMatch) {
+      const key = `${pairMatch[1]}.${pairMatch[2]}`;
+      const existing = errorsByPair.get(key) || { errors: 0, warnings: 0 };
+      if (issue.severity === 'ERROR') {
+        existing.errors += 1;
+      } else {
+        existing.warnings += 1;
+      }
+      errorsByPair.set(key, existing);
+    }
+    const optionMatch = (issue.path || '').match(/^steps\[(\d+)\]\.options\[(\d+)\]/);
+    if (optionMatch) {
+      const key = `${optionMatch[1]}.${optionMatch[2]}`;
+      const existing = errorsByOption.get(key) || { errors: 0, warnings: 0 };
+      if (issue.severity === 'ERROR') {
+        existing.errors += 1;
+      } else {
+        existing.warnings += 1;
+      }
+      errorsByOption.set(key, existing);
+    }
   });
-  return errorsByStep;
+  return { errorsByStep, errorsByPair, errorsByOption };
 }
 
 function isMediaBindingCompatible(binding: LessonBlueprintMediaBinding, targetFieldPath: string): boolean {
@@ -642,9 +666,19 @@ export function LessonBlueprintEditor({
   const [phraseItems, setPhraseItems] = useState<PhraseLibraryItem[]>([]);
   const [isPhraseLoading, setIsPhraseLoading] = useState(false);
   const [phraseError, setPhraseError] = useState('');
+  const [vocabPickerStepIndex, setVocabPickerStepIndex] = useState<number | null>(null);
+  const [vocabPickerSearch, setVocabPickerSearch] = useState('');
+  const [vocabPickerItems, setVocabPickerItems] = useState<import('@/types/curriculum').CurriculumVocabLibraryItem[]>([]);
+  const [isVocabPickerLoading, setIsVocabPickerLoading] = useState(false);
+  const [vocabPickerError, setVocabPickerError] = useState('');
   const hasAppliedInitialSectionRef = useRef(false);
   const hasAppliedInitialBlueprintKeyRef = useRef(false);
   const activeUploadTokenRef = useRef<string | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftKey = useMemo(() => `blueprint_draft_${mode}_${blueprint?.id || 'new'}`, [mode, blueprint?.id]);
+  const handleSaveRef = useRef<(() => Promise<void>) | null>(null);
+  const handlePreviewRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     if (mode === 'edit' && blueprint) {
@@ -692,6 +726,58 @@ export function LessonBlueprintEditor({
     }
   }, [capabilitiesData, form.lesson_kind, mode]);
 
+  // Auto-save draft to localStorage
+  useEffect(() => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+    setAutoSaveStatus('idle');
+    autoSaveTimerRef.current = setTimeout(() => {
+      try {
+        const draft = {
+          form,
+          payloadText,
+          selectedCourseKey,
+          savedAt: new Date().toISOString(),
+        };
+        localStorage.setItem(draftKey, JSON.stringify(draft));
+        setAutoSaveStatus('saved');
+      } catch {
+        setAutoSaveStatus('idle');
+      }
+    }, 3000);
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [form, payloadText, selectedCourseKey, draftKey]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isMac = navigator.platform.toUpperCase().includes('MAC');
+      const modifier = isMac ? event.metaKey : event.ctrlKey;
+      if (!modifier) return;
+
+      if (event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        void handleSaveRef.current?.();
+        return;
+      }
+      if (event.key.toLowerCase() === 'p') {
+        event.preventDefault();
+        void handlePreviewRef.current?.();
+        return;
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        void handleSaveRef.current?.();
+        return;
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   const selectedCourse = useMemo<CourseAdminListItem | null>(() => {
     return courses.find((course) => course.course_key === selectedCourseKey) ?? null;
   }, [courses, selectedCourseKey]);
@@ -735,6 +821,46 @@ export function LessonBlueprintEditor({
       cancelled = true;
     };
   }, [phrasePickerTarget, phraseSearch, selectedCourse?.target_language_id]);
+
+  useEffect(() => {
+    if (vocabPickerStepIndex === null || !selectedCourse?.target_language_id) {
+      setVocabPickerItems([]);
+      setVocabPickerError('');
+      setIsVocabPickerLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchVocab = async () => {
+      setIsVocabPickerLoading(true);
+      setVocabPickerError('');
+      try {
+        const response = await apiClient.get('/api/v1/admin/lesson-blueprints/vocab/library', {
+          params: {
+            language_id: selectedCourse.target_language_id,
+            search: vocabPickerSearch.trim() || undefined,
+            page: 1,
+            limit: 25,
+          },
+        });
+        if (cancelled) return;
+        setVocabPickerItems(response.data?.items ?? []);
+      } catch (error: any) {
+        if (cancelled) return;
+        setVocabPickerError(extractErrorMessage(error));
+        setVocabPickerItems([]);
+      } finally {
+        if (!cancelled) {
+          setIsVocabPickerLoading(false);
+        }
+      }
+    };
+
+    void fetchVocab();
+    return () => {
+      cancelled = true;
+    };
+  }, [vocabPickerStepIndex, vocabPickerSearch, selectedCourse?.target_language_id]);
 
   const lessonKindOptions = useMemo(
     () =>
@@ -943,7 +1069,7 @@ export function LessonBlueprintEditor({
   );
   const rawPayloadInvalid = safeParsePayload(payloadText) === null;
   const editableSteps = useMemo(() => getObjectArray(editablePayload.steps), [editablePayload]);
-  const stepValidationCounts = useMemo(() => getStepValidationCounts(validation), [validation]);
+  const { errorsByStep: stepValidationCounts, errorsByPair: pairValidationCounts, errorsByOption: optionValidationCounts } = useMemo(() => getStepValidationCounts(validation), [validation]);
   const mediaBindings = useMemo(() => getMediaBindings(editablePayload), [editablePayload]);
   const mediaFieldOptions = useMemo(() => {
     const topLevel = [
@@ -1423,6 +1549,19 @@ export function LessonBlueprintEditor({
     });
   };
 
+  const openVocabPicker = (stepIndex: number) => {
+    setVocabPickerSearch('');
+    setVocabPickerError('');
+    setVocabPickerStepIndex(stepIndex);
+  };
+
+  const applyVocabSelection = (vocabItem: import('@/types/curriculum').CurriculumVocabLibraryItem) => {
+    if (vocabPickerStepIndex === null) return;
+    updateStepField(vocabPickerStepIndex, 'vocabId', vocabItem.external_id);
+    setVocabPickerStepIndex(null);
+    setVocabPickerSearch('');
+  };
+
   const openPhrasePicker = (target: PhrasePickerTarget) => {
     setPhraseSearch('');
     setPhraseError('');
@@ -1668,6 +1807,7 @@ export function LessonBlueprintEditor({
       setIsPreviewing(false);
     }
   };
+  handlePreviewRef.current = handlePreview;
 
   const handleSave = async () => {
     const request = buildRequest();
@@ -1685,6 +1825,13 @@ export function LessonBlueprintEditor({
       setPayloadText(JSON.stringify(request.payload, null, 2));
       toast.success(mode === 'create' ? 'Blueprint draft created.' : 'Blueprint draft saved.');
       onSaved?.(result);
+      // Clear local draft on successful save
+      try {
+        localStorage.removeItem(draftKey);
+        setAutoSaveStatus('idle');
+      } catch {
+        // ignore
+      }
     } catch (error) {
       const message = extractErrorMessage(error);
       setErrorMessage(message);
@@ -1693,6 +1840,7 @@ export function LessonBlueprintEditor({
       setIsSaving(false);
     }
   };
+  handleSaveRef.current = handleSave;
 
   const handleClone = async () => {
     if (!blueprint) return;
@@ -2301,14 +2449,6 @@ export function LessonBlueprintEditor({
                       id="payload-unit-label"
                       value={getString(editablePayload.unitLabel)}
                       onChange={(event) => updateTopLevelField('unitLabel', event.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Level tag</label>
-                    <input
-                      value={getString(editablePayload.levelTag)}
-                      onChange={(event) => updateTopLevelField('levelTag', event.target.value)}
                       className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                     />
                   </div>
@@ -3427,28 +3567,79 @@ export function LessonBlueprintEditor({
                                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                               />
                             </div>
-                            <div className="lg:col-span-2">
-                              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Choices</label>
-                              <textarea
-                                rows={2}
-                                value={toTextList(getStringArray(step.choices))}
-                                onChange={(event) => updateStepField(index, 'choices', parseTokenList(event.target.value))}
-                                placeholder="One choice per line"
-                                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                              />
-                            </div>
+                             <div className="lg:col-span-2">
+                               <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Choices <span className="text-gray-400">(press Enter to add)</span></label>
+                               <div className="rounded-lg border border-gray-300 bg-white p-2 dark:border-gray-700 dark:bg-gray-800">
+                                 <div className="flex flex-wrap gap-2">
+                                   {getStringArray(step.choices).map((choice, choiceIndex) => (
+                                     <span
+                                       key={`${choice}-${choiceIndex}`}
+                                       className="inline-flex items-center gap-1 rounded-full bg-brand-100 px-3 py-1 text-xs font-medium text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
+                                     >
+                                       {choice}
+                                       <button
+                                         type="button"
+                                         onClick={() => {
+                                           const nextChoices = getStringArray(step.choices).filter((_, i) => i !== choiceIndex);
+                                           updateStepField(index, 'choices', nextChoices.length ? nextChoices : null);
+                                         }}
+                                         className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-brand-600 hover:bg-brand-200 dark:text-brand-300 dark:hover:bg-brand-800"
+                                       >
+                                         ×
+                                       </button>
+                                     </span>
+                                   ))}
+                                   <input
+                                     type="text"
+                                     placeholder="Type and press Enter"
+                                     className="min-w-[120px] flex-1 bg-transparent px-1 py-1 text-sm text-gray-900 outline-none placeholder:text-gray-400 dark:text-white"
+                                     onKeyDown={(event) => {
+                                       if (event.key === 'Enter') {
+                                         event.preventDefault();
+                                         const value = event.currentTarget.value.trim();
+                                         if (!value) return;
+                                         const existing = getStringArray(step.choices);
+                                         if (existing.includes(value)) {
+                                           toast.info('Choice already exists');
+                                           return;
+                                         }
+                                         updateStepField(index, 'choices', [...existing, value]);
+                                         event.currentTarget.value = '';
+                                       }
+                                     }}
+                                   />
+                                 </div>
+                               </div>
+                             </div>
                           </>
                         )}
-                        {form.lesson_kind === 'greetings_core' && (
-                          <>
-                            <div>
-                              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Vocab id</label>
-                              <input
-                                value={getString(step.vocabId)}
-                                onChange={(event) => updateStepField(index, 'vocabId', event.target.value)}
-                                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                              />
-                            </div>
+                         {form.lesson_kind === 'greetings_core' && (
+                           <>
+                             <div>
+                               <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Vocab</label>
+                               <div className="flex gap-2">
+                                 <div className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-200">
+                                   {getString(step.vocabId) || <span className="text-gray-400">No vocab selected</span>}
+                                 </div>
+                                 <button
+                                   type="button"
+                                   onClick={() => openVocabPicker(index)}
+                                   disabled={!selectedCourse?.target_language_id}
+                                   className="rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50 dark:border-brand-800 dark:bg-gray-900 dark:text-brand-300 dark:hover:bg-brand-950/30"
+                                 >
+                                   {getString(step.vocabId) ? 'Change' : 'Pick vocab'}
+                                 </button>
+                                 {getString(step.vocabId) && (
+                                   <button
+                                     type="button"
+                                     onClick={() => updateStepField(index, 'vocabId', '')}
+                                     className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-100 dark:border-red-900 dark:bg-red-950/20 dark:text-red-300"
+                                   >
+                                     Clear
+                                   </button>
+                                 )}
+                               </div>
+                             </div>
                             <div>
                               <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Context tag</label>
                               <input
@@ -3570,16 +3761,37 @@ export function LessonBlueprintEditor({
                                     No recognition options yet.
                                   </div>
                                 ) : (
-                                  recognitionOptions.map((option, optionIndex) => {
+                                   recognitionOptions.map((option, optionIndex) => {
                                     const imageFieldPath = `steps[${index}].options[${optionIndex}].imageUrl`;
+                                    const optionCounts = optionValidationCounts.get(`${index}.${optionIndex}`);
+                                    const hasOptionErrors = optionCounts && optionCounts.errors > 0;
+                                    const hasOptionWarnings = optionCounts && optionCounts.warnings > 0;
                                     return (
                                       <div
                                         key={`${getString(option.id) || 'option'}-${optionIndex}`}
-                                        className="rounded-lg border border-gray-200 p-4 dark:border-gray-800"
+                                        className={`rounded-lg border p-4 dark:border-gray-800 ${
+                                          hasOptionErrors
+                                            ? 'border-red-300 dark:border-red-800'
+                                            : hasOptionWarnings
+                                            ? 'border-amber-300 dark:border-amber-800'
+                                            : 'border-gray-200 dark:border-gray-800'
+                                        }`}
                                       >
                                         <div className="mb-3 flex items-center justify-between gap-3">
-                                          <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                            Option {optionIndex + 1}
+                                          <div className="flex items-center gap-2">
+                                            <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                              Option {optionIndex + 1}
+                                            </div>
+                                            {hasOptionErrors && (
+                                              <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                                                {optionCounts.errors} error{optionCounts.errors === 1 ? '' : 's'}
+                                              </span>
+                                            )}
+                                            {!hasOptionErrors && hasOptionWarnings && (
+                                              <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                                                {optionCounts.warnings} warning{optionCounts.warnings === 1 ? '' : 's'}
+                                              </span>
+                                            )}
                                           </div>
                                           <div className="flex items-center gap-2">
                                             <button
@@ -3726,17 +3938,36 @@ export function LessonBlueprintEditor({
                                   const sourceContentType =
                                     getString(pair.sourceContentType) ||
                                     getString(sourceRef?.contentType);
+                                  const pairCounts = pairValidationCounts.get(`${index}.${pairIndex}`);
+                                  const hasPairErrors = pairCounts && pairCounts.errors > 0;
+                                  const hasPairWarnings = pairCounts && pairCounts.warnings > 0;
                                   return (
                                     <div
                                       key={`${getString(pair.id) || 'pair'}-${pairIndex}`}
-                                      className="rounded-lg border border-gray-200 p-4 dark:border-gray-800"
+                                      className={`rounded-lg border p-4 dark:border-gray-800 ${
+                                        hasPairErrors
+                                          ? 'border-red-300 dark:border-red-800'
+                                          : hasPairWarnings
+                                          ? 'border-amber-300 dark:border-amber-800'
+                                          : 'border-gray-200 dark:border-gray-800'
+                                      }`}
                                     >
                                       <div className="mb-3 flex items-center justify-between gap-3">
-                                        <div>
+                                        <div className="flex items-center gap-2">
                                           <div className="text-sm font-medium text-gray-900 dark:text-white">
                                             Pair {pairIndex + 1}
                                           </div>
-                                          <div className="mt-1 flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                          {hasPairErrors && (
+                                            <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                                              {pairCounts.errors} error{pairCounts.errors === 1 ? '' : 's'}
+                                            </span>
+                                          )}
+                                          {!hasPairErrors && hasPairWarnings && (
+                                            <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                                              {pairCounts.warnings} warning{pairCounts.warnings === 1 ? '' : 's'}
+                                            </span>
+                                          )}
+                                          <div className="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
                                             {sourceContentType ? (
                                               <span className="rounded-full bg-brand-50 px-2 py-1 text-brand-700 dark:bg-brand-950/30 dark:text-brand-300">
                                                 {sourceContentType}
@@ -3777,39 +4008,35 @@ export function LessonBlueprintEditor({
                                           </button>
                                         </div>
                                       </div>
-                                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-900/60">
-                                        <div className="text-lg font-semibold text-gray-900 dark:text-white">
-                                          {getString(pair.yorubaText) || 'No Yoruba text'}
-                                        </div>
-                                        <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-                                          {getString(pair.englishText) || 'No English text'}
-                                        </div>
-                                      </div>
-                                      <details className="mt-4 rounded-lg border border-dashed border-gray-300 px-3 py-3 dark:border-gray-700">
-                                        <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-200">
-                                          Advanced fields
-                                        </summary>
-                                        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                                           <div>
-                                             <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">English text</label>
-                                             <input
-                                               value={getString(pair.englishText)}
-                                               onChange={(event) =>
-                                                 updateStepCollectionItemField(index, 'pairs', pairIndex, 'englishText', event.target.value)
-                                               }
-                                               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                                             />
-                                           </div>
-                                           <div className="lg:col-span-2">
-                                             <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Yoruba text</label>
-                                             <input
-                                               value={getString(pair.yorubaText)}
-                                               onChange={(event) =>
-                                                 updateStepCollectionItemField(index, 'pairs', pairIndex, 'yorubaText', event.target.value)
-                                               }
-                                               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                                             />
-                                           </div>
+                                       <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                         <div>
+                                           <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">English</label>
+                                           <input
+                                             value={getString(pair.englishText)}
+                                             onChange={(event) =>
+                                               updateStepCollectionItemField(index, 'pairs', pairIndex, 'englishText', event.target.value)
+                                             }
+                                             placeholder="English text"
+                                             className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                                           />
+                                         </div>
+                                         <div>
+                                           <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Yoruba</label>
+                                           <input
+                                             value={getString(pair.yorubaText)}
+                                             onChange={(event) =>
+                                               updateStepCollectionItemField(index, 'pairs', pairIndex, 'yorubaText', event.target.value)
+                                             }
+                                             placeholder="Yoruba text"
+                                             className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                                           />
+                                         </div>
+                                       </div>
+                                       <details className="mt-4 rounded-lg border border-dashed border-gray-300 px-3 py-3 dark:border-gray-700">
+                                         <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-200">
+                                           Advanced fields
+                                         </summary>
+                                         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
                                            <div className="lg:col-span-2">
                                              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Audio</label>
                                              <div className="flex flex-wrap gap-2">
@@ -4041,7 +4268,7 @@ export function LessonBlueprintEditor({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={handlePreview}
@@ -4068,6 +4295,12 @@ export function LessonBlueprintEditor({
             {isCloning ? 'Cloning…' : 'Clone Draft'}
           </button>
         )}
+        {autoSaveStatus === 'saved' && (
+          <span className="text-xs text-green-600 dark:text-green-400">Draft auto-saved</span>
+        )}
+        <span className="ml-auto text-xs text-gray-400 dark:text-gray-500">
+          Shortcuts: Ctrl+S Save · Ctrl+P Preview · Ctrl+Enter Publish
+        </span>
       </div>
 
       <Modal
@@ -4124,6 +4357,71 @@ export function LessonBlueprintEditor({
                     {phrase.category ? <span>{phrase.category}</span> : null}
                     {phrase.audio_url ? <span>Has audio</span> : <span>No audio</span>}
                     {phrase.is_published ? <span>Published</span> : <span>Draft</span>}
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={vocabPickerStepIndex !== null}
+        onClose={() => {
+          setVocabPickerStepIndex(null);
+          setVocabPickerSearch('');
+        }}
+        title="Pick Vocabulary"
+        maxWidth="2xl"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">
+              Search vocabulary
+            </label>
+            <input
+              value={vocabPickerSearch}
+              onChange={(event) => setVocabPickerSearch(event.target.value)}
+              placeholder="Search by lemma or ID"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+            />
+          </div>
+
+          {!selectedCourse?.target_language_id ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-300">
+              Select a course with a target language before picking vocabulary.
+            </div>
+          ) : null}
+
+          {vocabPickerError ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/20 dark:text-red-300">
+              {vocabPickerError}
+            </div>
+          ) : null}
+
+          <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">
+            {isVocabPickerLoading ? (
+              <div className="rounded-lg border border-dashed border-gray-300 px-3 py-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                Loading vocabulary…
+              </div>
+            ) : vocabPickerItems.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-gray-300 px-3 py-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                No vocabulary found for this language.
+              </div>
+            ) : (
+              vocabPickerItems.map((item) => (
+                <button
+                  key={item.external_id}
+                  type="button"
+                  onClick={() => applyVocabSelection(item)}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-left hover:border-brand-300 hover:bg-brand-50/40 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-brand-800 dark:hover:bg-brand-950/20"
+                >
+                  <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                    {item.lemma || item.external_id}
+                  </div>
+                  <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    ID: {item.external_id}
+                    {item.part_of_speech ? ` • ${item.part_of_speech}` : ''}
                   </div>
                 </button>
               ))

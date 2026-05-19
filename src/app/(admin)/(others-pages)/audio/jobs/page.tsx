@@ -27,6 +27,7 @@ interface AudioJob {
   audio_url?: string;
   output_duration_sec?: number | null;
   error_message?: string;
+  logs?: string | null;
   retry_count: number;
   max_retries: number;
   queued_at: string;
@@ -110,6 +111,34 @@ function AudioPlayer({ src }: { src: string }) {
         {playing ? <FaPause className="text-xs" /> : <FaPlay className="text-xs" />}
       </button>
       <audio ref={audioRef} src={src} preload="none" className="hidden" />
+    </div>
+  );
+}
+
+function LogsTooltip({ logs }: { logs?: string | null }) {
+  const [show, setShow] = useState(false);
+  if (!logs) return null;
+  return (
+    <div className="relative inline-block">
+      <button
+        type="button"
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        onFocus={() => setShow(true)}
+        onBlur={() => setShow(false)}
+        className="ml-2 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+      >
+        Logs
+      </button>
+      {show && (
+        <div className="absolute bottom-full left-1/2 z-50 mb-2 w-80 -translate-x-1/2 rounded-lg border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-700 dark:bg-gray-900">
+          <div className="mb-1 text-xs font-semibold text-gray-700 dark:text-gray-300">Generation Logs</div>
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-xs text-gray-600 dark:text-gray-400">
+            {logs}
+          </pre>
+          <div className="absolute bottom-0 left-1/2 h-2 w-2 -translate-x-1/2 translate-y-1/2 rotate-45 border-b border-r border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900" />
+        </div>
+      )}
     </div>
   );
 }
@@ -374,6 +403,12 @@ export default function AudioJobsPage() {
                         <div className="mt-1 flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
                           <FaExclamationTriangle className="text-[10px]" />
                           <span className="max-w-[16rem] truncate">{job.error_message}</span>
+                          <LogsTooltip logs={job.logs} />
+                        </div>
+                      ) : null}
+                      {!job.error_message && job.logs ? (
+                        <div className="mt-1">
+                          <LogsTooltip logs={job.logs} />
                         </div>
                       ) : null}
                     </td>
