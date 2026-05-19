@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 
 const BACKEND_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
-const ADMIN_TOKEN = process.env.ADMIN_MONITORING_TOKEN || '';
+const ADMIN_TOKEN = process.env.ADMIN_MONITORING_TOKEN || process.env.NEXT_PUBLIC_ADMIN_MONITORING_TOKEN || '';
 
 async function handleRequest(request: NextRequest, method: string) {
   try {
