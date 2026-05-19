@@ -627,7 +627,7 @@ export function LessonBlueprintEditor({
 }) {
   const toast = useToast();
 
-  const { data: coursesData } = useAdminCoursesList({ limit: 200 });
+  const { data: coursesData, isLoading: isCoursesLoading } = useAdminCoursesList({ limit: 200 });
   const courses = useMemo(() => coursesData?.items ?? [], [coursesData]);
   const { data: capabilitiesData, isError: capabilitiesError } = useAdminBlueprintCapabilities();
 
@@ -666,6 +666,15 @@ export function LessonBlueprintEditor({
   const [phraseItems, setPhraseItems] = useState<PhraseLibraryItem[]>([]);
   const [isPhraseLoading, setIsPhraseLoading] = useState(false);
   const [phraseError, setPhraseError] = useState('');
+  const [pairAutocomplete, setPairAutocomplete] = useState<{
+    stepIndex: number;
+    pairIndex: number;
+    search: string;
+  } | null>(null);
+  const [pairSearchResults, setPairSearchResults] = useState<PhraseLibraryItem[]>([]);
+  const [pairSearchLoading, setPairSearchLoading] = useState(false);
+  const [pairSearchError, setPairSearchError] = useState('');
+  const pairAutocompleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [vocabPickerStepIndex, setVocabPickerStepIndex] = useState<number | null>(null);
   const [vocabPickerSearch, setVocabPickerSearch] = useState('');
   const [vocabPickerItems, setVocabPickerItems] = useState<import('@/types/curriculum').CurriculumVocabLibraryItem[]>([]);
@@ -724,7 +733,11 @@ export function LessonBlueprintEditor({
         lesson_kind: capabilitiesData.lesson_kinds[0].key,
       }));
     }
-  }, [capabilitiesData, form.lesson_kind, mode]);
+    const contractVersion = capabilitiesData?.schema_compatibility?.schema_version;
+    if (contractVersion && form.schema_version !== contractVersion) {
+      setForm((prev) => ({ ...prev, schema_version: contractVersion }));
+    }
+  }, [capabilitiesData, form.lesson_kind, form.schema_version, mode]);
 
   // Auto-save draft to localStorage
   useEffect(() => {
@@ -821,6 +834,43 @@ export function LessonBlueprintEditor({
       cancelled = true;
     };
   }, [phrasePickerTarget, phraseSearch, selectedCourse?.target_language_id]);
+
+  // Debounced inline pair autocomplete
+  useEffect(() => {
+    if (!pairAutocomplete || pairAutocomplete.search.trim().length < 2) {
+      setPairSearchResults([]);
+      setPairSearchLoading(false);
+      setPairSearchError('');
+      return;
+    }
+    if (pairAutocompleteTimerRef.current) clearTimeout(pairAutocompleteTimerRef.current);
+
+    setPairSearchLoading(true);
+    setPairSearchError('');
+    pairAutocompleteTimerRef.current = setTimeout(async () => {
+      try {
+        const response = await apiClient.get('/api/v1/admin/content/phrases', {
+          params: {
+            language_id: selectedCourse?.target_language_id,
+            search: pairAutocomplete.search.trim(),
+            page: 1,
+            page_size: 10,
+          },
+        });
+        setPairSearchResults((response.data?.items ?? []) as PhraseLibraryItem[]);
+        setPairSearchLoading(false);
+        setPairSearchError('');
+      } catch (error: any) {
+        setPairSearchResults([]);
+        setPairSearchLoading(false);
+        setPairSearchError(extractErrorMessage(error));
+      }
+    }, 300);
+
+    return () => {
+      if (pairAutocompleteTimerRef.current) clearTimeout(pairAutocompleteTimerRef.current);
+    };
+  }, [pairAutocomplete, selectedCourse?.target_language_id]);
 
   useEffect(() => {
     if (vocabPickerStepIndex === null || !selectedCourse?.target_language_id) {
@@ -2095,7 +2145,13 @@ export function LessonBlueprintEditor({
                   value: course.course_key,
                   label: `${course.title} (${course.course_key})`,
                 }))}
-                placeholder={courses.length === 0 ? 'No courses available' : ''}
+                placeholder={
+                  isCoursesLoading
+                    ? 'Loading courses…'
+                    : courses.length === 0
+                    ? 'No courses available — check permissions'
+                    : ''
+                }
                 fullWidth
               />
             </div>
@@ -2132,16 +2188,13 @@ export function LessonBlueprintEditor({
               <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Schema version</label>
               <input
                 type="number"
-                min={1}
-                value={form.schema_version}
-                onChange={(event) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    schema_version: Math.max(1, Number(event.target.value || 1)),
-                  }))
-                }
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                value={capabilitiesData?.schema_compatibility?.schema_version ?? form.schema_version}
+                readOnly
+                className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-200"
               />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Managed by the backend schema compatibility contract.
+              </p>
             </div>
           </div>
         </div>
@@ -2747,45 +2800,12 @@ export function LessonBlueprintEditor({
 
             <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div>
-                <label htmlFor="payload-lesson-id" className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Lesson id</label>
-                <input
-                  id="payload-lesson-id"
-                  {...getFieldPathAttributes('id')}
-                  value={mode === 'create' ? (form.blueprint_key ?? '') : (getString(editablePayload.id) || form.blueprint_key || '')}
-                  readOnly
-                  className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
-                />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Managed by the system to match the lesson blueprint identity.
-                </p>
-              </div>
-              <div>
                 <label htmlFor="payload-title" className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Title</label>
                 <input
                   id="payload-title"
                   {...getFieldPathAttributes('title')}
                   value={getString(editablePayload.title)}
                   onChange={(event) => updateTopLevelField('title', event.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Mode</label>
-                <input
-                  id="payload-mode"
-                  {...getFieldPathAttributes('mode')}
-                  value={getString(editablePayload.mode)}
-                  onChange={(event) => updateTopLevelField('mode', event.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Flow mode</label>
-                <input
-                  id="payload-flow-mode"
-                  {...getFieldPathAttributes('flowMode')}
-                  value={getString(editablePayload.flowMode)}
-                  onChange={(event) => updateTopLevelField('flowMode', event.target.value)}
                   className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                 />
               </div>
@@ -2801,7 +2821,31 @@ export function LessonBlueprintEditor({
                   options={lessonLaunchRouteOptions}
                 />
               </div>
-              <div className="lg:col-span-2">
+              {(form.lesson_kind === 'reading_practice' || form.lesson_kind === 'tone_marks_drill') && (
+                <>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Mode</label>
+                    <input
+                      id="payload-mode"
+                      {...getFieldPathAttributes('mode')}
+                      value={getString(editablePayload.mode)}
+                      onChange={(event) => updateTopLevelField('mode', event.target.value)}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Flow mode</label>
+                    <input
+                      id="payload-flow-mode"
+                      {...getFieldPathAttributes('flowMode')}
+                      value={getString(editablePayload.flowMode)}
+                      onChange={(event) => updateTopLevelField('flowMode', event.target.value)}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    />
+                  </div>
+                </>
+              )}
+              <div>
                 <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Description</label>
                 <textarea
                   id="payload-description"
@@ -2813,7 +2857,7 @@ export function LessonBlueprintEditor({
                 />
               </div>
               {form.lesson_kind !== 'reading_practice' && form.lesson_kind !== 'greetings_core' && (
-                <div className="lg:col-span-2">
+                <div>
                   <label htmlFor="payload-target-vocab" className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
                     Vocabulary bindings
                   </label>
@@ -3281,37 +3325,40 @@ export function LessonBlueprintEditor({
                           const isCompatible = assetLibraryTargetFieldPath
                             ? isMediaBindingCompatible(binding, assetLibraryTargetFieldPath)
                             : false;
+                          const assetKind = binding.asset_kind || inferAssetKindFromFieldPath(fieldPath);
                           return (
                             <div
                               key={fieldPath}
-                              className="flex h-full flex-col rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900"
+                              className="flex flex-col rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
                             >
-                              <div className="flex h-full flex-col gap-3">
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-sm font-medium text-gray-900 dark:text-white">{binding.file_name || fieldPath}</div>
-                                  <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                    {fieldPath} • {(binding.asset_kind || inferAssetKindFromFieldPath(fieldPath)).toUpperCase()}
-                                  </div>
-                                  <div className="mt-3">
-                                    <MediaLinkPreview
-                                      url={binding.asset_url}
-                                      label={binding.file_name || fieldPath}
-                                      kind={binding.asset_kind || inferAssetKindFromFieldPath(fieldPath)}
-                                      compact
-                                    />
-                                  </div>
+                              <div className="p-2">
+                                <MediaLinkPreview
+                                  url={binding.asset_url}
+                                  label={binding.file_name || fieldPath}
+                                  kind={assetKind}
+                                  compact
+                                />
+                              </div>
+                              <div className="border-t border-gray-100 px-2 pb-2 pt-1.5 dark:border-gray-800">
+                                <div className="truncate text-xs font-medium text-gray-700 dark:text-gray-200">
+                                  {binding.file_name || fieldPath}
                                 </div>
-                                {assetLibraryTargetFieldPath ? (
+                                <div className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
+                                  {assetKind.toUpperCase()}
+                                </div>
+                              </div>
+                              {assetLibraryTargetFieldPath ? (
+                                <div className="border-t border-gray-100 px-2 py-1.5 dark:border-gray-800">
                                   <button
                                     type="button"
                                     onClick={() => reuseAssetFromLibrary(fieldPath, assetLibraryTargetFieldPath)}
                                     disabled={!isCompatible}
-                                    className="mt-auto rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300"
+                                    className="w-full rounded-lg border border-blue-300 bg-blue-50 px-2 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300"
                                   >
-                                    Select
+                                    {isCompatible ? 'Select' : 'Incompatible'}
                                   </button>
-                                ) : null}
-                              </div>
+                                </div>
+                              ) : null}
                             </div>
                           );
                         })}
@@ -3350,45 +3397,48 @@ export function LessonBlueprintEditor({
                           const isCompatible = assetLibraryTargetFieldPath
                             ? isMediaBindingCompatible(item.binding, assetLibraryTargetFieldPath)
                             : false;
+                          const assetKind = item.binding.asset_kind || inferAssetKindFromFieldPath(item.field_path);
+                          const isOtherCourse = assetLibraryScope === 'all_courses' && selectedCourse?.course_key && item.course_key !== selectedCourse.course_key;
                           return (
                             <div
                               key={`${item.blueprint_id}:${item.field_path}:${item.binding.storage_key}`}
-                              className="flex h-full flex-col rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900"
+                              className={`flex flex-col rounded-lg border bg-white dark:bg-gray-900 ${
+                                isOtherCourse
+                                  ? 'border-amber-200 dark:border-amber-900/50'
+                                  : 'border-gray-200 dark:border-gray-800'
+                              }`}
                             >
-                              <div className="flex h-full flex-col gap-3">
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                    {item.binding.file_name || item.field_path}
-                                  </div>
-                                  <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                    {item.blueprint_key} • {item.field_path} • {(item.binding.asset_kind || inferAssetKindFromFieldPath(item.field_path)).toUpperCase()}
-                                  </div>
-                                  <div className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                                    {item.course_key || 'Unknown course'}
-                                    {assetLibraryScope === 'all_courses' && selectedCourse?.course_key && item.course_key !== selectedCourse.course_key
-                                      ? ' • cross-course'
-                                      : ''}
-                                  </div>
-                                  <div className="mt-3">
-                                    <MediaLinkPreview
-                                      url={item.binding.asset_url}
-                                      label={item.binding.file_name || item.field_path}
-                                      kind={item.binding.asset_kind || inferAssetKindFromFieldPath(item.field_path)}
-                                      compact
-                                    />
-                                  </div>
+                              <div className="p-2">
+                                <MediaLinkPreview
+                                  url={item.binding.asset_url}
+                                  label={item.binding.file_name || item.field_path}
+                                  kind={assetKind}
+                                  compact
+                                />
+                              </div>
+                              <div className="border-t border-gray-100 px-2 pb-2 pt-1.5 dark:border-gray-800">
+                                <div className="truncate text-xs font-medium text-gray-700 dark:text-gray-200">
+                                  {item.binding.file_name || item.field_path}
                                 </div>
-                                {assetLibraryTargetFieldPath ? (
+                                <div className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
+                                  <span>{assetKind.toUpperCase()}</span>
+                                  <span>•</span>
+                                  <span className="truncate">{item.course_key || 'Unknown'}</span>
+                                  {isOtherCourse ? <span className="text-amber-600 dark:text-amber-400">cross-course</span> : null}
+                                </div>
+                              </div>
+                              {assetLibraryTargetFieldPath ? (
+                                <div className="border-t border-gray-100 px-2 py-1.5 dark:border-gray-800">
                                   <button
                                     type="button"
                                     onClick={() => reuseGlobalLibraryAsset(item, assetLibraryTargetFieldPath)}
                                     disabled={!isCompatible}
-                                    className="mt-auto rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300"
+                                    className="w-full rounded-lg border border-blue-300 bg-blue-50 px-2 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300"
                                   >
-                                    Select
+                                    {isCompatible ? 'Select' : 'Incompatible'}
                                   </button>
-                                ) : null}
-                              </div>
+                                </div>
+                              ) : null}
                             </div>
                           );
                         })}
@@ -3985,20 +4035,23 @@ export function LessonBlueprintEditor({
                                           </div>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                          <button
-                                            type="button"
-                                            onClick={() =>
-                                              openPhrasePicker({
-                                                mode: 'matchingPairItem',
-                                                stepIndex: index,
-                                                pairIndex,
-                                              })
-                                            }
-                                            disabled={!selectedCourse?.target_language_id}
-                                            className="rounded-lg border border-brand-300 px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950/30"
-                                          >
-                                            {sourcePhraseId ? 'Replace phrase' : 'Use phrase'}
-                                          </button>
+                                          {sourcePhraseId && (
+                                            <button
+                                              type="button"
+                                              onClick={() => updatePayload((prev) => {
+                                                const steps = getObjectArray(prev.steps);
+                                                const step = { ...(steps[index] ?? {}) };
+                                                const pairs = [...getObjectArray(step.pairs)];
+                                                pairs[pairIndex] = { ...(pairs[pairIndex] ?? {}), sourceContentType: undefined, sourcePhraseId: undefined, sourceRef: undefined };
+                                                step.pairs = pairs;
+                                                steps[index] = step;
+                                                return { ...prev, steps };
+                                              })}
+                                              className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                                            >
+                                              Clear link
+                                            </button>
+                                          )}
                                           <button
                                             type="button"
                                             onClick={() => removeStepCollectionItem(index, 'pairs', pairIndex)}
@@ -4009,28 +4062,110 @@ export function LessonBlueprintEditor({
                                         </div>
                                       </div>
                                        <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                                         <div>
+                                         <div className="relative">
                                            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">English</label>
-                                           <input
-                                             value={getString(pair.englishText)}
-                                             onChange={(event) =>
-                                               updateStepCollectionItemField(index, 'pairs', pairIndex, 'englishText', event.target.value)
-                                             }
-                                             placeholder="English text"
-                                             className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                                           />
+                                           <div className="relative">
+                                             <input
+                                               value={getString(pair.englishText)}
+                                               onChange={(event) => {
+                                                 updateStepCollectionItemField(index, 'pairs', pairIndex, 'englishText', event.target.value);
+                                                 setPairAutocomplete({
+                                                   stepIndex: index,
+                                                   pairIndex,
+                                                   search: event.target.value,
+                                                 });
+                                               }}
+                                               onFocus={() => {
+                                                 if (getString(pair.englishText)) {
+                                                   setPairAutocomplete({
+                                                     stepIndex: index,
+                                                     pairIndex,
+                                                     search: getString(pair.englishText),
+                                                   });
+                                                 }
+                                               }}
+                                               onBlur={() => {
+                                                 setTimeout(() => {
+                                                   setPairAutocomplete(null);
+                                                   setPairSearchResults([]);
+                                                 }, 200);
+                                               }}
+                                               placeholder="Type to search phrases…"
+                                               className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-3 pr-8 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                                             />
+                                             <svg className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
+                                             </svg>
+                                           </div>
+                                           {pairAutocomplete?.stepIndex === index &&
+                                             pairAutocomplete?.pairIndex === pairIndex &&
+                                             (pairSearchLoading || pairSearchResults.length > 0 || pairSearchError) && (
+                                             <div className="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
+                                               {pairSearchLoading && (
+                                                 <div className="px-3 py-2 text-xs text-gray-500">Searching…</div>
+                                               )}
+                                               {pairSearchError && (
+                                                 <div className="px-3 py-2 text-xs text-red-500">{pairSearchError}</div>
+                                               )}
+                                                {pairSearchResults.map((item) => (
+                                                  <button
+                                                    key={item.id}
+                                                    type="button"
+                                                    onMouseDown={(event) => {
+                                                      event.preventDefault();
+                                                      updatePayload((prev) => {
+                                                        const steps = getObjectArray(prev.steps);
+                                                        const step = { ...(steps[index] ?? {}) };
+                                                        const pairs = [...getObjectArray(step.pairs)];
+                                                        pairs[pairIndex] = {
+                                                          ...(pairs[pairIndex] ?? {}),
+                                                          englishText: item.translation,
+                                                          yorubaText: item.phrase,
+                                                          audioUrl: item.audio_url || getString(pairs[pairIndex]?.audioUrl),
+                                                          sourceContentType: 'phrase',
+                                                          sourcePhraseId: item.id,
+                                                          sourceRef: buildSourceRef('phrase', item.id, 'pair_source'),
+                                                        };
+                                                        step.pairs = pairs;
+                                                        steps[index] = step;
+                                                        return { ...prev, steps };
+                                                      });
+                                                      setPairAutocomplete(null);
+                                                      setPairSearchResults([]);
+                                                    }}
+                                                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+                                                 >
+                                                   <span className="font-medium text-gray-900 dark:text-white">
+                                                     {item.translation}
+                                                   </span>
+                                                   <span className="text-gray-500 dark:text-gray-400">→</span>
+                                                   <span className="text-brand-700 dark:text-brand-300">
+                                                     {item.phrase}
+                                                   </span>
+                                                   {item.audio_url && (
+                                                     <span className="ml-auto text-xs text-gray-400">♪</span>
+                                                   )}
+                                                 </button>
+                                               ))}
+                                             </div>
+                                           )}
                                          </div>
-                                         <div>
-                                           <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Yoruba</label>
-                                           <input
-                                             value={getString(pair.yorubaText)}
-                                             onChange={(event) =>
-                                               updateStepCollectionItemField(index, 'pairs', pairIndex, 'yorubaText', event.target.value)
-                                             }
-                                             placeholder="Yoruba text"
-                                             className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                                           />
-                                         </div>
+                                          <div>
+                                            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Yoruba</label>
+                                            <input
+                                              value={getString(pair.yorubaText)}
+                                              onChange={(event) =>
+                                                updateStepCollectionItemField(index, 'pairs', pairIndex, 'yorubaText', event.target.value)
+                                              }
+                                              readOnly={!!sourcePhraseId}
+                                              placeholder={sourcePhraseId ? 'Filled from phrase' : 'Yoruba text'}
+                                              className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${
+                                                sourcePhraseId
+                                                  ? 'border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-300'
+                                                  : 'border-gray-300 bg-white text-gray-900 focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white'
+                                              }`}
+                                            />
+                                          </div>
                                        </div>
                                        <details className="mt-4 rounded-lg border border-dashed border-gray-300 px-3 py-3 dark:border-gray-700">
                                          <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-200">
@@ -4165,11 +4300,7 @@ export function LessonBlueprintEditor({
                                  onRemove={() => void handleRemoveAsset(`steps[${index}].imageUrl`)}
                                />
                              </div>
-                           ) : (
-                             <div className="mt-2 rounded-lg border border-dashed border-gray-300 px-3 py-4 text-center text-xs text-gray-400 dark:border-gray-700 dark:text-gray-500">
-                               No image
-                             </div>
-                           )}
+                           ) : null}
                          </div>
                          <div>
                            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Audio</label>
@@ -4208,11 +4339,7 @@ export function LessonBlueprintEditor({
                              <div className="mt-3">
                                <MediaLinkPreview url={getString(step.audioUrl)} label={`Step ${index + 1} audio`} kind="audio" compact />
                              </div>
-                           ) : (
-                             <div className="mt-2 rounded-lg border border-dashed border-gray-300 px-3 py-4 text-center text-xs text-gray-400 dark:border-gray-700 dark:text-gray-500">
-                               No audio
-                             </div>
-                           )}
+                           ) : null}
                          </div>
                       </div>
                     </div>
@@ -4237,25 +4364,27 @@ export function LessonBlueprintEditor({
           </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-            <div className="flex items-center justify-between gap-3">
-              <label htmlFor="raw-payload-json" className="text-base font-semibold text-gray-900 dark:text-white">Raw Payload JSON</label>
-              <button
-                type="button"
-                onClick={() => {
-                  const formatted = formatJson(payloadText);
-                  setPayloadText(formatted);
-                  const parsed = safeParsePayload(formatted);
-                  if (parsed) {
-                    setLastValidPayload(parsed);
-                    setForm((prev) => ({ ...prev, payload: parsed }));
-                  }
-                }}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-900 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:hover:bg-white/[0.03]"
-              >
-                Format JSON
-              </button>
-            </div>
+          <details className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+            <summary className="flex cursor-pointer items-center justify-between gap-3">
+              <span className="text-base font-semibold text-gray-900 dark:text-white">Raw Payload JSON</span>
+              <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const formatted = formatJson(payloadText);
+                    setPayloadText(formatted);
+                    const parsed = safeParsePayload(formatted);
+                    if (parsed) {
+                      setLastValidPayload(parsed);
+                      setForm((prev) => ({ ...prev, payload: parsed }));
+                    }
+                  }}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-900 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:hover:bg-white/[0.03]"
+                >
+                  Format JSON
+                </button>
+              </div>
+            </summary>
 
             <textarea
               id="raw-payload-json"
@@ -4264,7 +4393,7 @@ export function LessonBlueprintEditor({
               spellCheck={false}
               className="mt-4 h-[360px] w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-3 font-mono text-xs text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-white"
             />
-          </div>
+          </details>
         </div>
       </div>
 
