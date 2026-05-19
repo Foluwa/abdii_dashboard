@@ -47,6 +47,32 @@ function ageInDays(value: string) {
   return Math.max(0, Math.floor((Date.now() - parsed.getTime()) / (24 * 60 * 60 * 1000)));
 }
 
+function isAudioAsset(assetType: string) {
+  return assetType === 'audio' || assetType === 'generated_audio' || assetType.includes('audio');
+}
+
+function MediaPreview({ storageKey, assetType }: { storageKey: string; assetType: string }) {
+  if (!isAudioAsset(assetType)) return <span className="text-xs text-gray-400">—</span>;
+  const baseUrl = process.env.NEXT_PUBLIC_MEDIA_BASE_URL || (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000');
+  const src = `${baseUrl}/api/v1/media/${encodeURIComponent(storageKey)}`;
+  return (
+    <audio
+      controls
+      preload="none"
+      className="h-8 w-48"
+      onError={(e) => {
+        // Fallback: try without /api/v1/media/ prefix if first fails
+        const el = e.currentTarget;
+        if (el.src.includes('/api/v1/media/')) {
+          el.src = `${baseUrl}/${encodeURIComponent(storageKey)}`;
+        }
+      }}
+    >
+      <source src={src} />
+    </audio>
+  );
+}
+
 function mapStatusBadge(status: OrphanAssetCandidateStatus) {
   if (status === 'deleted') return <StatusBadge status="success" label="deleted" />;
   if (status === 'protected') return <StatusBadge status="info" label="protected" />;
@@ -463,21 +489,22 @@ export default function OrphanAssetsPage() {
                 <th className="px-3 py-3">Prefix</th>
                 <th className="px-3 py-3">Age</th>
                 <th className="px-3 py-3">Status</th>
+                <th className="px-3 py-3">Preview</th>
                 <th className="px-3 py-3">Actions</th>
               </tr>
             </thead>
             <tbody>
               {candidates.isLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-10 text-center text-gray-500 dark:text-gray-400">Loading orphan candidates…</td>
+                  <td colSpan={9} className="px-3 py-10 text-center text-gray-500 dark:text-gray-400">Loading orphan candidates…</td>
                 </tr>
               ) : candidates.isError ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-10 text-center text-red-600 dark:text-red-300">Failed to load orphan candidates.</td>
+                  <td colSpan={9} className="px-3 py-10 text-center text-red-600 dark:text-red-300">Failed to load orphan candidates.</td>
                 </tr>
               ) : candidateItems.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-10 text-center text-gray-500 dark:text-gray-400">No orphan candidates match the current filters.</td>
+                  <td colSpan={9} className="px-3 py-10 text-center text-gray-500 dark:text-gray-400">No orphan candidates match the current filters.</td>
                 </tr>
               ) : (
                 candidateItems.map((item: OrphanAssetCandidateItem) => (
@@ -502,6 +529,9 @@ export default function OrphanAssetsPage() {
                     <td className="px-3 py-3 text-gray-700 dark:text-gray-200">{item.prefix}</td>
                     <td className="px-3 py-3 text-gray-700 dark:text-gray-200">{ageInDays(item.last_modified)}d</td>
                     <td className="px-3 py-3">{mapStatusBadge(item.status)}</td>
+                    <td className="px-3 py-3">
+                      <MediaPreview storageKey={item.storage_key} assetType={item.asset_type} />
+                    </td>
                     <td className="px-3 py-3">
                       <div className="flex flex-wrap gap-2">
                         <button type="button" onClick={() => void handleBulkAction('protect', [item.candidate_id])} className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-300">Protect</button>
