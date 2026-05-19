@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
 
 import PageBreadCrumb from '@/components/common/PageBreadCrumb';
@@ -27,31 +27,36 @@ function renderStatus(status: string) {
   return <StatusBadge status="pending" label={status} />;
 }
 
+const PAGE_SIZE = 25;
+const API_LIMIT = 200;
+
 export default function DictionaryImportListPage() {
   const toast = useToast();
   const [items, setItems] = useState<DictionaryImportBatchListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [limit] = useState(25);
   const [status, setStatus] = useState('');
   const [source, setSource] = useState('');
   const [search, setSearch] = useState('');
+  const [apiTotal, setApiTotal] = useState(0);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const all = await listDictionaryImportBatches({ limit: 500, offset: 0 });
+      // Fetch up to API_LIMIT batches at offset 0 for client-side filtering
+      const all = await listDictionaryImportBatches({ limit: API_LIMIT, offset: 0 });
       setItems(all);
+      setApiTotal(all.length);
     } catch (error: any) {
       toast.error(error?.response?.data?.detail ?? error?.message ?? 'Failed to load batches');
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     void refresh();
-  }, []);
+  }, [refresh]);
 
   const filteredItems = useMemo(() => {
     let result = [...items];
@@ -76,18 +81,20 @@ export default function DictionaryImportListPage() {
   }, [items, status, source, search]);
 
   const total = filteredItems.length;
-  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const pageItems = useMemo(
-    () => filteredItems.slice((page - 1) * limit, page * limit),
-    [filteredItems, page, limit]
+    () => filteredItems.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredItems, page]
   );
-  const pageStart = total === 0 ? 0 : (page - 1) * limit + 1;
-  const pageEnd = total === 0 ? 0 : Math.min(page * limit, total);
+  const pageStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const pageEnd = total === 0 ? 0 : Math.min(page * PAGE_SIZE, total);
 
   const totalInserted = items.reduce((sum, item) => sum + (item.inserted_count || 0), 0);
   const totalUpdated = items.reduce((sum, item) => sum + (item.updated_count || 0), 0);
   const totalSkipped = items.reduce((sum, item) => sum + (item.skipped_count || 0), 0);
   const totalErrors = items.reduce((sum, item) => sum + (item.error_count || 0), 0);
+
+  const showFetchMore = apiTotal >= API_LIMIT && !status && !source && !search;
 
   return (
     <div className="space-y-6">
@@ -160,6 +167,12 @@ export default function DictionaryImportListPage() {
             />
           </div>
         </div>
+
+        {showFetchMore && (
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+            <span className="font-medium">Note:</span> Showing the latest {API_LIMIT} batches. Use filters to narrow results.
+          </div>
+        )}
 
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-left text-sm">
