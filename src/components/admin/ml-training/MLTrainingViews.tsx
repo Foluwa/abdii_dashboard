@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
+import { ConfirmationModal } from "@/components/ui/modal/ConfirmationModal";
 import Pagination from "@/components/tables/Pagination";
 import Button from "@/components/ui/button/Button";
 import {
