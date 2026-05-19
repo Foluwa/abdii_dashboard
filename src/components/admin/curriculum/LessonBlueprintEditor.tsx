@@ -4172,7 +4172,7 @@ export function LessonBlueprintEditor({
                                            Advanced fields
                                          </summary>
                                          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                                           <div className="lg:col-span-2">
+                                           <div>
                                              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Audio</label>
                                              <div className="flex flex-wrap gap-2">
                                                <button
@@ -4205,57 +4205,49 @@ export function LessonBlueprintEditor({
                                                  {generatingAudioFieldPath === pairAudioFieldPath ? 'Generating…' : 'Generate'}
                                                </button>
                                              </div>
-                                             {getString(pair.audioUrl) ? (
-                                               <div className="mt-3">
-                                                 <MediaLinkPreview url={getString(pair.audioUrl)} label={`Pair ${pairIndex + 1} audio`} kind="audio" compact />
-                                               </div>
-                                             ) : (
-                                               <div className="mt-2 rounded-lg border border-dashed border-gray-300 px-3 py-3 text-center text-xs text-gray-400 dark:border-gray-700 dark:text-gray-500">
-                                                 No audio
-                                               </div>
-                                             )}
-                                           </div>
-                                           <div className="lg:col-span-2">
-                                             <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Image</label>
-                                             <div className="flex flex-wrap gap-2">
-                                               <button
-                                                 type="button"
-                                                 onClick={() => openAssetPicker(pairImageFieldPath, 'image/*', 'Image')}
-                                                 disabled={uploadingFieldPath === pairImageFieldPath}
-                                                 className="rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50 dark:border-brand-800 dark:bg-gray-900 dark:text-brand-300 dark:hover:bg-brand-950/30"
-                                               >
-                                                 {uploadingFieldPath === pairImageFieldPath
-                                                   ? `Uploading ${uploadProgressByField[pairImageFieldPath] ?? 0}%`
-                                                   : 'Upload Image'}
-                                               </button>
-                                               <button
-                                                 type="button"
-                                                 onClick={() => openAssetLibrary(pairImageFieldPath)}
-                                                 className={`rounded-lg border px-3 py-2 text-xs font-medium ${
-                                                   assetLibraryTargetFieldPath === pairImageFieldPath
-                                                     ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
-                                                     : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200'
-                                                 }`}
-                                               >
-                                                 Library
-                                               </button>
-                                             </div>
-                                             {getString(pair.imageUrl) ? (
-                                               <div className="mt-3">
-                                                 <MediaLinkPreview
-                                                   url={getString(pair.imageUrl)}
-                                                   label={`Pair ${pairIndex + 1} image`}
-                                                   kind="image"
-                                                   compact
-                                                   onRemove={() => void handleRemoveAsset(pairImageFieldPath)}
-                                                 />
-                                               </div>
-                                             ) : (
-                                               <div className="mt-2 rounded-lg border border-dashed border-gray-300 px-3 py-3 text-center text-xs text-gray-400 dark:border-gray-700 dark:text-gray-500">
-                                                 No image
-                                               </div>
-                                             )}
-                                           </div>
+                                              {getString(pair.audioUrl) ? (
+                                                <div className="mt-3">
+                                                  <MediaLinkPreview url={getString(pair.audioUrl)} label={`Pair ${pairIndex + 1} audio`} kind="audio" compact />
+                                                </div>
+                                              ) : null}
+                                            </div>
+                                            <div>
+                                              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Image</label>
+                                              <div className="flex flex-wrap gap-2">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => openAssetPicker(pairImageFieldPath, 'image/*', 'Image')}
+                                                  disabled={uploadingFieldPath === pairImageFieldPath}
+                                                  className="rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50 dark:border-brand-800 dark:bg-gray-900 dark:text-brand-300 dark:hover:bg-brand-950/30"
+                                                >
+                                                  {uploadingFieldPath === pairImageFieldPath
+                                                    ? `Uploading ${uploadProgressByField[pairImageFieldPath] ?? 0}%`
+                                                    : 'Upload Image'}
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => openAssetLibrary(pairImageFieldPath)}
+                                                  className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                                                    assetLibraryTargetFieldPath === pairImageFieldPath
+                                                      ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                                                      : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200'
+                                                  }`}
+                                                >
+                                                  Library
+                                                </button>
+                                              </div>
+                                              {getString(pair.imageUrl) ? (
+                                                <div className="mt-3">
+                                                  <MediaLinkPreview
+                                                    url={getString(pair.imageUrl)}
+                                                    label={`Pair ${pairIndex + 1} image`}
+                                                    kind="image"
+                                                    compact
+                                                    onRemove={() => void handleRemoveAsset(pairImageFieldPath)}
+                                                  />
+                                                </div>
+                                              ) : null}
+                                            </div>
                                         </div>
                                       </details>
                                     </div>
@@ -4404,7 +4396,7 @@ export function LessonBlueprintEditor({
           disabled={isPreviewing || isSaving}
           className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:hover:bg-white/[0.03]"
         >
-          {isPreviewing ? 'Previewing…' : 'Preview Validate'}
+          {isPreviewing ? 'Validating…' : 'Validate'}
         </button>
         <button
           type="button"

@@ -125,6 +125,7 @@ export const mainNavigationItems: AdminNavItem[] = [
       { name: "Admin Jobs", path: "/admin/jobs", permission: "system:read" },
       { name: "ML Training", path: "/operations/ml-training", permission: "system:read" },
       { name: "Configuration", path: "/system/configuration" },
+      { name: "Email Templates", path: "/system/email-templates" },
       { name: "Audit Log", path: "/content/audit-log", permission: "content:read" },
       { name: "Testing", path: "/system/testing", permission: "testing:access" },
     ],
