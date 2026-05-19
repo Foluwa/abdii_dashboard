@@ -34,14 +34,14 @@ export const mainNavigationItems: AdminNavItem[] = [
     icon: <PieChartIcon />,
     permission: "users:read",
     subItems: [
-      { name: "Game Analytics", path: "/reports/game-analytics" },
+      { name: "Game Analytics", path: "/analytics" },
       {
         name: "Player Analytics",
-        path: "/reports/player-analytics",
+        path: "/analytics/players",
       },
       {
         name: "Curriculum Ops",
-        path: "/reports/curriculum-ops",
+        path: "/analytics/curriculum-ops",
       },
     ],
   },

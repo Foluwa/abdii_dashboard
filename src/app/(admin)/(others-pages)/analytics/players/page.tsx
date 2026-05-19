@@ -114,8 +114,9 @@ export default function PlayerAnalyticsPage() {
   };
 
   const tabs = [
-    { name: 'Overview', href: '/reports/game-analytics', active: false },
-    { name: 'Players', href: '/reports/player-analytics', active: true },
+    { name: 'Overview', href: '/analytics', active: false },
+    { name: 'Players', href: '/analytics/players', active: true },
+    { name: 'Curriculum Ops', href: '/analytics/curriculum-ops', active: false },
   ];
 
   if (isError) {
@@ -319,7 +320,7 @@ export default function PlayerAnalyticsPage() {
                     {leaderboard.players.map((player: any) => (
                       <tr
                         key={player.user_id}
-                        onClick={() => router.push(`/overview/analytics/players?userId=${player.user_id}`)}
+                        onClick={() => router.push(`/analytics/players?userId=${player.user_id}`)}
                         className="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
                       >
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -398,7 +399,7 @@ export default function PlayerAnalyticsPage() {
         <div className="space-y-6">
           {/* Back Button */}
           <button
-            onClick={() => router.push('/reports/player-analytics')}
+            onClick={() => router.push('/analytics/players')}
             className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-2"
           >
             ← Back to Leaderboard
