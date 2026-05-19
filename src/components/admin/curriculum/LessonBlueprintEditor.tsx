@@ -2380,23 +2380,66 @@ export function LessonBlueprintEditor({
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Thumbnail URL</label>
-                    <input
-                      id="payload-thumbnail-url"
-                      {...getFieldPathAttributes('thumbnailUrl')}
-                      value={getString(editablePayload.thumbnailUrl)}
-                      onChange={(event) => updateTopLevelField('thumbnailUrl', event.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                    />
+                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Thumbnail</label>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openAssetPicker('thumbnailUrl', 'image/*', 'Image')}
+                        disabled={uploadingFieldPath === 'thumbnailUrl'}
+                        className="rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50 dark:border-brand-800 dark:bg-gray-900 dark:text-brand-300 dark:hover:bg-brand-950/30"
+                      >
+                        {uploadingFieldPath === 'thumbnailUrl' ? `Uploading ${uploadProgressByField.thumbnailUrl ?? 0}%` : 'Upload Thumbnail'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openAssetLibrary('thumbnailUrl')}
+                        className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                          assetLibraryTargetFieldPath === 'thumbnailUrl'
+                            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                            : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200'
+                        }`}
+                      >
+                        Library
+                      </button>
+                    </div>
+                    {getString(editablePayload.thumbnailUrl) ? (
+                      <div className="mt-3">
+                        <MediaLinkPreview url={getString(editablePayload.thumbnailUrl)} label="Thumbnail" kind="image" compact onRemove={() => void handleRemoveAsset('thumbnailUrl')} />
+                      </div>
+                    ) : (
+                      <div className="mt-2 rounded-lg border border-dashed border-gray-300 px-3 py-3 text-center text-xs text-gray-400 dark:border-gray-700 dark:text-gray-500">No thumbnail</div>
+                    )}
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Character image URL</label>
-                    <input
-                      {...getFieldPathAttributes('characterImageUrl')}
-                      value={getString(editablePayload.characterImageUrl)}
-                      onChange={(event) => updateTopLevelField('characterImageUrl', event.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                    />
+                    <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Character image</label>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openAssetPicker('characterImageUrl', 'image/*', 'Image')}
+                        disabled={uploadingFieldPath === 'characterImageUrl'}
+                        className="rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50 dark:border-brand-800 dark:bg-gray-900 dark:text-brand-300 dark:hover:bg-brand-950/30"
+                      >
+                        {uploadingFieldPath === 'characterImageUrl' ? `Uploading ${uploadProgressByField.characterImageUrl ?? 0}%` : 'Upload Character'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openAssetLibrary('characterImageUrl')}
+                        className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                          assetLibraryTargetFieldPath === 'characterImageUrl'
+                            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                            : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200'
+                        }`}
+                      >
+                        Library
+                      </button>
+                    </div>
+                    {getString(editablePayload.characterImageUrl) ? (
+                      <div className="mt-3">
+                        <MediaLinkPreview url={getString(editablePayload.characterImageUrl)} label="Character" kind="image" compact onRemove={() => void handleRemoveAsset('characterImageUrl')} />
+                      </div>
+                    ) : (
+                      <div className="mt-2 rounded-lg border border-dashed border-gray-300 px-3 py-3 text-center text-xs text-gray-400 dark:border-gray-700 dark:text-gray-500">No character image</div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2683,24 +2726,15 @@ export function LessonBlueprintEditor({
 
             <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Hero image URL</label>
-                <div className="flex gap-2">
-                  <input
-                    id="payload-hero-image-url"
-                    {...getFieldPathAttributes('heroImageUrl')}
-                    value={getString(editablePayload.heroImageUrl)}
-                    readOnly
-                    className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
-                  />
+                <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Hero image</label>
+                <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => openAssetPicker('heroImageUrl', 'image/*', 'Image')}
                     disabled={uploadingFieldPath === 'heroImageUrl'}
                     className="rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50 dark:border-brand-800 dark:bg-gray-900 dark:text-brand-300 dark:hover:bg-brand-950/30"
                   >
-                    {uploadingFieldPath === 'heroImageUrl'
-                      ? `Uploading ${uploadProgressByField.heroImageUrl ?? 0}%`
-                      : 'Upload'}
+                    {uploadingFieldPath === 'heroImageUrl' ? `Uploading ${uploadProgressByField.heroImageUrl ?? 0}%` : 'Upload Hero'}
                   </button>
                   <button
                     type="button"
@@ -2716,26 +2750,15 @@ export function LessonBlueprintEditor({
                 </div>
                 {getString(editablePayload.heroImageUrl) ? (
                   <div className="mt-3">
-                    <MediaLinkPreview
-                      url={getString(editablePayload.heroImageUrl)}
-                      label="Hero image"
-                      kind="image"
-                      compact
-                      onRemove={() => void handleRemoveAsset('heroImageUrl')}
-                    />
+                    <MediaLinkPreview url={getString(editablePayload.heroImageUrl)} label="Hero image" kind="image" compact onRemove={() => void handleRemoveAsset('heroImageUrl')} />
                   </div>
-                ) : null}
+                ) : (
+                  <div className="mt-2 rounded-lg border border-dashed border-gray-300 px-3 py-3 text-center text-xs text-gray-400 dark:border-gray-700 dark:text-gray-500">No hero image</div>
+                )}
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Cover image URL</label>
-                <div className="flex gap-2">
-                  <input
-                    id="payload-cover-image-url"
-                    {...getFieldPathAttributes('coverImageUrl')}
-                    value={getString(editablePayload.coverImageUrl)}
-                    readOnly
-                    className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
-                  />
+                <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Cover image</label>
+                <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => openAssetPicker('coverImageUrl', 'image/*', 'Image')}
@@ -2768,18 +2791,13 @@ export function LessonBlueprintEditor({
                       onRemove={() => void handleRemoveAsset('coverImageUrl')}
                     />
                   </div>
-                ) : null}
+                ) : (
+                  <div className="mt-2 rounded-lg border border-dashed border-gray-300 px-3 py-3 text-center text-xs text-gray-400 dark:border-gray-700 dark:text-gray-500">No cover image</div>
+                )}
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Image URL</label>
-                <div className="flex gap-2">
-                  <input
-                    id="payload-image-url"
-                    {...getFieldPathAttributes('imageUrl')}
-                    value={getString(editablePayload.imageUrl)}
-                    readOnly
-                    className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
-                  />
+                <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Image</label>
+                <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => openAssetPicker('imageUrl', 'image/*', 'Image')}
@@ -2788,7 +2806,7 @@ export function LessonBlueprintEditor({
                   >
                     {uploadingFieldPath === 'imageUrl'
                       ? `Uploading ${uploadProgressByField.imageUrl ?? 0}%`
-                      : 'Upload'}
+                      : 'Upload Image'}
                   </button>
                   <button
                     type="button"
@@ -2812,18 +2830,15 @@ export function LessonBlueprintEditor({
                       onRemove={() => void handleRemoveAsset('imageUrl')}
                     />
                   </div>
-                ) : null}
+                ) : (
+                  <div className="mt-2 rounded-lg border border-dashed border-gray-300 px-3 py-4 text-center text-xs text-gray-400 dark:border-gray-700 dark:text-gray-500">
+                    No image
+                  </div>
+                )}
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Audio URL</label>
-                <div className="flex gap-2">
-                  <input
-                    id="payload-audio-url"
-                    {...getFieldPathAttributes('audioUrl')}
-                    value={getString(editablePayload.audioUrl)}
-                    readOnly
-                    className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
-                  />
+                <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Audio</label>
+                <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => openAssetPicker('audioUrl', 'audio/*', 'Audio')}
@@ -2832,7 +2847,7 @@ export function LessonBlueprintEditor({
                   >
                     {uploadingFieldPath === 'audioUrl'
                       ? `Uploading ${uploadProgressByField.audioUrl ?? 0}%`
-                      : 'Upload'}
+                      : 'Upload Audio'}
                   </button>
                   <button
                     type="button"
@@ -2858,7 +2873,11 @@ export function LessonBlueprintEditor({
                   <div className="mt-3">
                     <MediaLinkPreview url={getString(editablePayload.audioUrl)} label="Audio" kind="audio" compact />
                   </div>
-                ) : null}
+                ) : (
+                  <div className="mt-2 rounded-lg border border-dashed border-gray-300 px-3 py-4 text-center text-xs text-gray-400 dark:border-gray-700 dark:text-gray-500">
+                    No audio
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-3 lg:col-span-2">
                 <input
@@ -3352,14 +3371,6 @@ export function LessonBlueprintEditor({
                             fullWidth
                           />
                         </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Step id <span className="text-gray-400">(auto-generated)</span></label>
-                          <input
-                            value={getString(step.stepId)}
-                            readOnly
-                            className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-400"
-                          />
-                        </div>
                         <div className="lg:col-span-2">
                           <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Title</label>
                           <input
@@ -3594,17 +3605,9 @@ export function LessonBlueprintEditor({
                                             </button>
                                           </div>
                                         </div>
-                                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                                            <div>
-                                             <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Option id <span className="text-gray-400">(auto-generated)</span></label>
-                                             <input
-                                               value={getString(option.id)}
-                                               readOnly
-                                               className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-400"
-                                             />
-                                           </div>
-                                          <div>
-                                            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">English text</label>
+                                             <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">English text</label>
                                             <input
                                               value={getString(option.englishText)}
                                               onChange={(event) =>
@@ -3623,49 +3626,45 @@ export function LessonBlueprintEditor({
                                               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                                             />
                                           </div>
-                                          <div className="lg:col-span-2">
-                                            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Image URL</label>
-                                            <div className="flex gap-2">
-                                              <input
-                                                {...getFieldPathAttributes(imageFieldPath)}
-                                                value={getString(option.imageUrl)}
-                                                readOnly
-                                                className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
-                                              />
-                                              <button
-                                                type="button"
-                                                onClick={() => openAssetPicker(imageFieldPath, 'image/*', 'Image')}
-                                                disabled={uploadingFieldPath === imageFieldPath}
-                                                className="rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50 dark:border-brand-800 dark:bg-gray-900 dark:text-brand-300 dark:hover:bg-brand-950/30"
-                                              >
-                                                {uploadingFieldPath === imageFieldPath
-                                                  ? `Uploading ${uploadProgressByField[imageFieldPath] ?? 0}%`
-                                                  : 'Upload'}
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={() => openAssetLibrary(imageFieldPath)}
-                                                className={`rounded-lg border px-3 py-2 text-xs font-medium ${
-                                                  assetLibraryTargetFieldPath === imageFieldPath
-                                                    ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
-                                                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200'
-                                                }`}
-                                              >
-                                                Library
-                                              </button>
-                                            </div>
-                                            {getString(option.imageUrl) ? (
-                                              <div className="mt-3">
-                                                <MediaLinkPreview
-                                                  url={getString(option.imageUrl)}
-                                                  label={`Option ${optionIndex + 1} image`}
-                                                  kind="image"
-                                                  compact
-                                                  onRemove={() => void handleRemoveAsset(imageFieldPath)}
-                                                />
-                                              </div>
-                                            ) : null}
-                                          </div>
+                                           <div className="lg:col-span-2">
+                                             <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Image</label>
+                                             <div className="flex flex-wrap gap-2">
+                                               <button
+                                                 type="button"
+                                                 onClick={() => openAssetPicker(imageFieldPath, 'image/*', 'Image')}
+                                                 disabled={uploadingFieldPath === imageFieldPath}
+                                                 className="rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50 dark:border-brand-800 dark:bg-gray-900 dark:text-brand-300 dark:hover:bg-brand-950/30"
+                                               >
+                                                 {uploadingFieldPath === imageFieldPath
+                                                   ? `Uploading ${uploadProgressByField[imageFieldPath] ?? 0}%`
+                                                   : 'Upload Image'}
+                                               </button>
+                                               <button
+                                                 type="button"
+                                                 onClick={() => openAssetLibrary(imageFieldPath)}
+                                                 className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                                                   assetLibraryTargetFieldPath === imageFieldPath
+                                                     ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                                                     : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200'
+                                                 }`}
+                                               >
+                                                 Library
+                                               </button>
+                                             </div>
+                                             {getString(option.imageUrl) ? (
+                                               <div className="mt-3">
+                                                 <MediaLinkPreview
+                                                   url={getString(option.imageUrl)}
+                                                   label={`Option ${optionIndex + 1} image`}
+                                                   kind="image"
+                                                   compact
+                                                   onRemove={() => void handleRemoveAsset(imageFieldPath)}
+                                                 />
+                                               </div>
+                                             ) : (
+                                               <div className="mt-2 rounded-lg border border-dashed border-gray-300 px-3 py-3 text-center text-xs text-gray-400 dark:border-gray-700 dark:text-gray-500">No image</div>
+                                             )}
+                                           </div>
                                         </div>
                                       </div>
                                     );
@@ -3792,121 +3791,109 @@ export function LessonBlueprintEditor({
                                         </summary>
                                         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
                                            <div>
-                                             <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Pair id <span className="text-gray-400">(auto-generated)</span></label>
+                                             <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">English text</label>
                                              <input
-                                               value={getString(pair.id)}
-                                               readOnly
-                                               className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-400"
+                                               value={getString(pair.englishText)}
+                                               onChange={(event) =>
+                                                 updateStepCollectionItemField(index, 'pairs', pairIndex, 'englishText', event.target.value)
+                                               }
+                                               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                                              />
                                            </div>
-                                          <div>
-                                            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">English text</label>
-                                            <input
-                                              value={getString(pair.englishText)}
-                                              onChange={(event) =>
-                                                updateStepCollectionItemField(index, 'pairs', pairIndex, 'englishText', event.target.value)
-                                              }
-                                              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                                            />
-                                          </div>
-                                          <div className="lg:col-span-2">
-                                            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Yoruba text</label>
-                                            <input
-                                              value={getString(pair.yorubaText)}
-                                              onChange={(event) =>
-                                                updateStepCollectionItemField(index, 'pairs', pairIndex, 'yorubaText', event.target.value)
-                                              }
-                                              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                                            />
-                                          </div>
-                                        <div className="lg:col-span-2">
-                                          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Pair audio URL</label>
-                                          <div className="flex gap-2">
-                                            <input
-                                              {...getFieldPathAttributes(pairAudioFieldPath)}
-                                              value={getString(pair.audioUrl)}
-                                              readOnly
-                                              className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
-                                            />
-                                            <button
-                                              type="button"
-                                              onClick={() => openAssetPicker(pairAudioFieldPath, 'audio/*', 'Audio')}
-                                              disabled={uploadingFieldPath === pairAudioFieldPath}
-                                              className="rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50 dark:border-brand-800 dark:bg-gray-900 dark:text-brand-300 dark:hover:bg-brand-950/30"
-                                            >
-                                              {uploadingFieldPath === pairAudioFieldPath
-                                                ? `Uploading ${uploadProgressByField[pairAudioFieldPath] ?? 0}%`
-                                                : 'Upload'}
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => openAssetLibrary(pairAudioFieldPath)}
-                                              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
-                                                assetLibraryTargetFieldPath === pairAudioFieldPath
-                                                  ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
-                                                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200'
-                                              }`}
-                                            >
-                                              Library
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => handleGenerateAudio(pairAudioFieldPath, getString(pair.yorubaText) || getString(pair.englishText) || `pair ${pairIndex + 1}`)}
-                                              disabled={generatingAudioFieldPath === pairAudioFieldPath}
-                                              className="rounded-lg border border-purple-300 bg-purple-50 px-3 py-2 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50 dark:border-purple-800 dark:bg-purple-950/30 dark:text-purple-300"
-                                            >
-                                              {generatingAudioFieldPath === pairAudioFieldPath ? 'Generating…' : 'Generate'}
-                                            </button>
-                                          </div>
-                                          {getString(pair.audioUrl) ? (
-                                            <div className="mt-3">
-                                              <MediaLinkPreview url={getString(pair.audioUrl)} label={`Pair ${pairIndex + 1} audio`} kind="audio" compact />
-                                            </div>
-                                          ) : null}
-                                        </div>
-                                        <div className="lg:col-span-2">
-                                          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Pair image URL</label>
-                                          <div className="flex gap-2">
-                                            <input
-                                              {...getFieldPathAttributes(pairImageFieldPath)}
-                                              value={getString(pair.imageUrl)}
-                                              readOnly
-                                              className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
-                                            />
-                                            <button
-                                              type="button"
-                                              onClick={() => openAssetPicker(pairImageFieldPath, 'image/*', 'Image')}
-                                              disabled={uploadingFieldPath === pairImageFieldPath}
-                                              className="rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50 dark:border-brand-800 dark:bg-gray-900 dark:text-brand-300 dark:hover:bg-brand-950/30"
-                                            >
-                                              {uploadingFieldPath === pairImageFieldPath
-                                                ? `Uploading ${uploadProgressByField[pairImageFieldPath] ?? 0}%`
-                                                : 'Upload'}
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => openAssetLibrary(pairImageFieldPath)}
-                                              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
-                                                assetLibraryTargetFieldPath === pairImageFieldPath
-                                                  ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
-                                                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200'
-                                              }`}
-                                            >
-                                              Library
-                                            </button>
-                                          </div>
-                                          {getString(pair.imageUrl) ? (
-                                            <div className="mt-3">
-                                              <MediaLinkPreview
-                                                url={getString(pair.imageUrl)}
-                                                label={`Pair ${pairIndex + 1} image`}
-                                                kind="image"
-                                                compact
-                                                onRemove={() => void handleRemoveAsset(pairImageFieldPath)}
-                                              />
-                                            </div>
-                                          ) : null}
-                                        </div>
+                                           <div className="lg:col-span-2">
+                                             <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Yoruba text</label>
+                                             <input
+                                               value={getString(pair.yorubaText)}
+                                               onChange={(event) =>
+                                                 updateStepCollectionItemField(index, 'pairs', pairIndex, 'yorubaText', event.target.value)
+                                               }
+                                               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                                             />
+                                           </div>
+                                           <div className="lg:col-span-2">
+                                             <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Audio</label>
+                                             <div className="flex flex-wrap gap-2">
+                                               <button
+                                                 type="button"
+                                                 onClick={() => openAssetPicker(pairAudioFieldPath, 'audio/*', 'Audio')}
+                                                 disabled={uploadingFieldPath === pairAudioFieldPath}
+                                                 className="rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50 dark:border-brand-800 dark:bg-gray-900 dark:text-brand-300 dark:hover:bg-brand-950/30"
+                                               >
+                                                 {uploadingFieldPath === pairAudioFieldPath
+                                                   ? `Uploading ${uploadProgressByField[pairAudioFieldPath] ?? 0}%`
+                                                   : 'Upload Audio'}
+                                               </button>
+                                               <button
+                                                 type="button"
+                                                 onClick={() => openAssetLibrary(pairAudioFieldPath)}
+                                                 className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                                                   assetLibraryTargetFieldPath === pairAudioFieldPath
+                                                     ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                                                     : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200'
+                                                 }`}
+                                               >
+                                                 Library
+                                               </button>
+                                               <button
+                                                 type="button"
+                                                 onClick={() => handleGenerateAudio(pairAudioFieldPath, getString(pair.yorubaText) || getString(pair.englishText) || `pair ${pairIndex + 1}`)}
+                                                 disabled={generatingAudioFieldPath === pairAudioFieldPath}
+                                                 className="rounded-lg border border-purple-300 bg-purple-50 px-3 py-2 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50 dark:border-purple-800 dark:bg-purple-950/30 dark:text-purple-300"
+                                               >
+                                                 {generatingAudioFieldPath === pairAudioFieldPath ? 'Generating…' : 'Generate'}
+                                               </button>
+                                             </div>
+                                             {getString(pair.audioUrl) ? (
+                                               <div className="mt-3">
+                                                 <MediaLinkPreview url={getString(pair.audioUrl)} label={`Pair ${pairIndex + 1} audio`} kind="audio" compact />
+                                               </div>
+                                             ) : (
+                                               <div className="mt-2 rounded-lg border border-dashed border-gray-300 px-3 py-3 text-center text-xs text-gray-400 dark:border-gray-700 dark:text-gray-500">
+                                                 No audio
+                                               </div>
+                                             )}
+                                           </div>
+                                           <div className="lg:col-span-2">
+                                             <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Image</label>
+                                             <div className="flex flex-wrap gap-2">
+                                               <button
+                                                 type="button"
+                                                 onClick={() => openAssetPicker(pairImageFieldPath, 'image/*', 'Image')}
+                                                 disabled={uploadingFieldPath === pairImageFieldPath}
+                                                 className="rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50 dark:border-brand-800 dark:bg-gray-900 dark:text-brand-300 dark:hover:bg-brand-950/30"
+                                               >
+                                                 {uploadingFieldPath === pairImageFieldPath
+                                                   ? `Uploading ${uploadProgressByField[pairImageFieldPath] ?? 0}%`
+                                                   : 'Upload Image'}
+                                               </button>
+                                               <button
+                                                 type="button"
+                                                 onClick={() => openAssetLibrary(pairImageFieldPath)}
+                                                 className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                                                   assetLibraryTargetFieldPath === pairImageFieldPath
+                                                     ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                                                     : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200'
+                                                 }`}
+                                               >
+                                                 Library
+                                               </button>
+                                             </div>
+                                             {getString(pair.imageUrl) ? (
+                                               <div className="mt-3">
+                                                 <MediaLinkPreview
+                                                   url={getString(pair.imageUrl)}
+                                                   label={`Pair ${pairIndex + 1} image`}
+                                                   kind="image"
+                                                   compact
+                                                   onRemove={() => void handleRemoveAsset(pairImageFieldPath)}
+                                                 />
+                                               </div>
+                                             ) : (
+                                               <div className="mt-2 rounded-lg border border-dashed border-gray-300 px-3 py-3 text-center text-xs text-gray-400 dark:border-gray-700 dark:text-gray-500">
+                                                 No image
+                                               </div>
+                                             )}
+                                           </div>
                                         </div>
                                       </details>
                                     </div>
@@ -3916,94 +3903,90 @@ export function LessonBlueprintEditor({
                             </div>
                           </div>
                         )}
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Image URL</label>
-                          <div className="flex gap-2">
-                            <input
-                              {...getFieldPathAttributes(`steps[${index}].imageUrl`)}
-                              value={getString(step.imageUrl)}
-                              readOnly
-                              className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => openAssetPicker(`steps[${index}].imageUrl`, 'image/*', 'Image')}
-                              disabled={uploadingFieldPath === `steps[${index}].imageUrl`}
-                              className="rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50 dark:border-brand-800 dark:bg-gray-900 dark:text-brand-300 dark:hover:bg-brand-950/30"
-                            >
-                              {uploadingFieldPath === `steps[${index}].imageUrl`
-                                ? `Uploading ${uploadProgressByField[`steps[${index}].imageUrl`] ?? 0}%`
-                                : 'Upload'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openAssetLibrary(`steps[${index}].imageUrl`)}
-                              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
-                                assetLibraryTargetFieldPath === `steps[${index}].imageUrl`
-                                  ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
-                                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200'
-                              }`}
-                            >
-                              Library
-                            </button>
-                          </div>
-                          {getString(step.imageUrl) ? (
-                            <div className="mt-3">
-                              <MediaLinkPreview
-                                url={getString(step.imageUrl)}
-                                label={`Step ${index + 1} image`}
-                                kind="image"
-                                compact
-                                onRemove={() => void handleRemoveAsset(`steps[${index}].imageUrl`)}
-                              />
-                            </div>
-                          ) : null}
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Audio URL</label>
-                          <div className="flex gap-2">
-                            <input
-                              {...getFieldPathAttributes(`steps[${index}].audioUrl`)}
-                              value={getString(step.audioUrl)}
-                              readOnly
-                              className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800/60 dark:text-white"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => openAssetPicker(`steps[${index}].audioUrl`, 'audio/*', 'Audio')}
-                              disabled={uploadingFieldPath === `steps[${index}].audioUrl`}
-                              className="rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50 dark:border-brand-800 dark:bg-gray-900 dark:text-brand-300 dark:hover:bg-brand-950/30"
-                            >
-                              {uploadingFieldPath === `steps[${index}].audioUrl`
-                                ? `Uploading ${uploadProgressByField[`steps[${index}].audioUrl`] ?? 0}%`
-                                : 'Upload'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openAssetLibrary(`steps[${index}].audioUrl`)}
-                              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
-                                assetLibraryTargetFieldPath === `steps[${index}].audioUrl`
-                                  ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
-                                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200'
-                              }`}
-                            >
-                              Library
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleGenerateAudio(`steps[${index}].audioUrl`, getString(step.yorubaText) || getString(step.phrase) || getString(step.title) || getString(step.prompt) || `step ${index + 1}`)}
-                              disabled={generatingAudioFieldPath === `steps[${index}].audioUrl`}
-                              className="rounded-lg border border-purple-300 bg-purple-50 px-3 py-2 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50 dark:border-purple-800 dark:bg-purple-950/30 dark:text-purple-300"
-                            >
-                              {generatingAudioFieldPath === `steps[${index}].audioUrl` ? 'Generating…' : 'Generate'}
-                            </button>
-                          </div>
-                          {getString(step.audioUrl) ? (
-                            <div className="mt-3">
-                              <MediaLinkPreview url={getString(step.audioUrl)} label={`Step ${index + 1} audio`} kind="audio" compact />
-                            </div>
-                          ) : null}
-                        </div>
+                         <div>
+                           <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Image</label>
+                           <div className="flex flex-wrap gap-2">
+                             <button
+                               type="button"
+                               onClick={() => openAssetPicker(`steps[${index}].imageUrl`, 'image/*', 'Image')}
+                               disabled={uploadingFieldPath === `steps[${index}].imageUrl`}
+                               className="rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50 dark:border-brand-800 dark:bg-gray-900 dark:text-brand-300 dark:hover:bg-brand-950/30"
+                             >
+                               {uploadingFieldPath === `steps[${index}].imageUrl`
+                                 ? `Uploading ${uploadProgressByField[`steps[${index}].imageUrl`] ?? 0}%`
+                                 : 'Upload Image'}
+                             </button>
+                             <button
+                               type="button"
+                               onClick={() => openAssetLibrary(`steps[${index}].imageUrl`)}
+                               className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                                 assetLibraryTargetFieldPath === `steps[${index}].imageUrl`
+                                   ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                                   : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200'
+                               }`}
+                             >
+                               Library
+                             </button>
+                           </div>
+                           {getString(step.imageUrl) ? (
+                             <div className="mt-3">
+                               <MediaLinkPreview
+                                 url={getString(step.imageUrl)}
+                                 label={`Step ${index + 1} image`}
+                                 kind="image"
+                                 compact
+                                 onRemove={() => void handleRemoveAsset(`steps[${index}].imageUrl`)}
+                               />
+                             </div>
+                           ) : (
+                             <div className="mt-2 rounded-lg border border-dashed border-gray-300 px-3 py-4 text-center text-xs text-gray-400 dark:border-gray-700 dark:text-gray-500">
+                               No image
+                             </div>
+                           )}
+                         </div>
+                         <div>
+                           <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Audio</label>
+                           <div className="flex flex-wrap gap-2">
+                             <button
+                               type="button"
+                               onClick={() => openAssetPicker(`steps[${index}].audioUrl`, 'audio/*', 'Audio')}
+                               disabled={uploadingFieldPath === `steps[${index}].audioUrl`}
+                               className="rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50 dark:border-brand-800 dark:bg-gray-900 dark:text-brand-300 dark:hover:bg-brand-950/30"
+                             >
+                               {uploadingFieldPath === `steps[${index}].audioUrl`
+                                 ? `Uploading ${uploadProgressByField[`steps[${index}].audioUrl`] ?? 0}%`
+                                 : 'Upload Audio'}
+                             </button>
+                             <button
+                               type="button"
+                               onClick={() => openAssetLibrary(`steps[${index}].audioUrl`)}
+                               className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                                 assetLibraryTargetFieldPath === `steps[${index}].audioUrl`
+                                   ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                                   : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200'
+                               }`}
+                             >
+                               Library
+                             </button>
+                             <button
+                               type="button"
+                               onClick={() => handleGenerateAudio(`steps[${index}].audioUrl`, getString(step.yorubaText) || getString(step.phrase) || getString(step.title) || getString(step.prompt) || `step ${index + 1}`)}
+                               disabled={generatingAudioFieldPath === `steps[${index}].audioUrl`}
+                               className="rounded-lg border border-purple-300 bg-purple-50 px-3 py-2 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50 dark:border-purple-800 dark:bg-purple-950/30 dark:text-purple-300"
+                             >
+                               {generatingAudioFieldPath === `steps[${index}].audioUrl` ? 'Generating…' : 'Generate'}
+                             </button>
+                           </div>
+                           {getString(step.audioUrl) ? (
+                             <div className="mt-3">
+                               <MediaLinkPreview url={getString(step.audioUrl)} label={`Step ${index + 1} audio`} kind="audio" compact />
+                             </div>
+                           ) : (
+                             <div className="mt-2 rounded-lg border border-dashed border-gray-300 px-3 py-4 text-center text-xs text-gray-400 dark:border-gray-700 dark:text-gray-500">
+                               No audio
+                             </div>
+                           )}
+                         </div>
                       </div>
                     </div>
                   );

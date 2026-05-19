@@ -77,8 +77,18 @@ export const mainNavigationItems: AdminNavItem[] = [
     ],
   },
   {
-    name: "Media",
+    name: "Analytics",
     icon: <PieChartIcon />,
+    permission: "users:read",
+    subItems: [
+      { name: "Game Analytics", path: "/analytics" },
+      { name: "Player Analytics", path: "/analytics/players" },
+      { name: "Curriculum Ops", path: "/analytics/curriculum-ops" },
+    ],
+  },
+  {
+    name: "Media",
+    icon: <BoxCubeIcon />,
     subItems: [
       { name: "Voices", path: "/audio/voices", permission: "audio:read" },
       { name: "Audio Jobs", path: "/audio/jobs", permission: "audio:read" },
