@@ -53,14 +53,18 @@ export const mainNavigationItems: AdminNavItem[] = [
       {
         name: "Library",
         subItems: [
-          { name: "Words", path: "/content/library/words" },
-          { name: "Phrases", path: "/content/library/phrases" },
-          { name: "Time Phrases", path: "/content/library/time-phrases" },
-          { name: "Sentences", path: "/content/library/sentences" },
-          { name: "Proverbs", path: "/content/library/proverbs" },
-          { name: "Letters", path: "/content/library/letters" },
-          { name: "Numbers", path: "/content/library/numbers" },
+          { name: "Words", path: "/content/words" },
+          { name: "Phrases", path: "/content/phrases" },
+          { name: "Time Phrases", path: "/content/time-phrases" },
+          { name: "Sentences", path: "/content/sentences" },
+          { name: "Proverbs", path: "/content/proverbs" },
+          { name: "Letters", path: "/content/letters" },
+          { name: "Numbers", path: "/content/numbers" },
         ],
+      },
+      {
+        name: "Dictionary Import",
+        path: "/content/dictionary-import",
       },
       {
         name: "Learning Items",
