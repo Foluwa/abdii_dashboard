@@ -17,6 +17,7 @@ import { StyledSelect } from "@/components/ui/form/StyledSelect";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmationModal } from "@/components/ui/modal/ConfirmationModal";
 import { AudioWaveform } from "@/components/ui/audio/AudioWaveform";
+import InlineAudioPlayer from "@/components/ui/audio/InlineAudioPlayer";
 import { RegenerateAudioModal } from "@/components/modals/RegenerateAudioModal";
 import { GoogleSheetsBulkImport } from "@/components/admin/GoogleSheetsBulkImport";
 import { scheduleQueuedAudioRefresh } from "@/lib/audioRegeneration";
@@ -1639,17 +1640,9 @@ export default function TimePhrasesPage() {
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            {phrase.audio_url ? (
-                              <div className="space-y-2">
-                                <div className="min-w-[280px] max-w-md">
-                                  <AudioWaveform
-                                    src={phrase.audio_url}
-                                    height={40}
-                                    waveColor="#94a3b8"
-                                    progressColor="#3b82f6"
-                                    cursorColor="#1d4ed8"
-                                  />
-                                </div>
+                            <div className="flex items-center gap-3">
+                              <InlineAudioPlayer src={phrase.audio_url} />
+                              {phrase.audio_url ? (
                                 <button
                                   onClick={() => openRegenerateModal(phrase)}
                                   className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
@@ -1658,17 +1651,17 @@ export default function TimePhrasesPage() {
                                   <FiVolume2 className="w-4 h-4" />
                                   <span>Regenerate</span>
                                 </button>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => openRegenerateModal(phrase)}
-                                className="flex items-center gap-1 text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
-                                title="Generate audio"
-                              >
-                                <FiVolume2 className="w-5 h-5" />
-                                <span className="text-xs">Generate</span>
-                              </button>
-                            )}
+                              ) : (
+                                <button
+                                  onClick={() => openRegenerateModal(phrase)}
+                                  className="flex items-center gap-1 text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
+                                  title="Generate audio"
+                                >
+                                  <FiVolume2 className="w-4 h-4" />
+                                  <span className="text-xs">Generate</span>
+                                </button>
+                              )}
+                            </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex flex-col gap-1">

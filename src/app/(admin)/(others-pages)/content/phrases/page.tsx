@@ -17,6 +17,7 @@ import { StyledSelect } from "@/components/ui/form/StyledSelect";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmationModal } from "@/components/ui/modal/ConfirmationModal";
 import { AudioWaveform } from "@/components/ui/audio/AudioWaveform";
+import InlineAudioPlayer from "@/components/ui/audio/InlineAudioPlayer";
 import { RegenerateAudioModal } from "@/components/modals/RegenerateAudioModal";
 import { scheduleQueuedAudioRefresh } from "@/lib/audioRegeneration";
 import { GoogleSheetsBulkImport } from "@/components/admin/GoogleSheetsBulkImport";
@@ -1515,19 +1516,7 @@ export default function PhrasesPage() {
                           )}
                         </td>
                         <td className="px-6 py-4">
-                          {phrase.audio_url ? (
-                            <div className="min-w-[280px] max-w-md">
-                              <AudioWaveform
-                                src={phrase.audio_url}
-                                height={40}
-                                waveColor="#94a3b8"
-                                progressColor="#3b82f6"
-                                cursorColor="#1d4ed8"
-                              />
-                            </div>
-                          ) : (
-                            <span className="text-xs text-gray-400 dark:text-gray-500">No audio</span>
-                          )}
+                          <InlineAudioPlayer src={phrase.audio_url} />
                         </td>
                         <td className="px-6 py-4 text-right space-x-2">
                           <button
@@ -1638,20 +1627,10 @@ export default function PhrasesPage() {
                       {phrase.last_regeneration_status &&
                         renderRegenerationBadge(phrase.last_regeneration_status, phrase.last_regeneration_error)}
                       {phrase.alignment_job_status && renderAlignmentJobBadge(phrase)}
-                      {phrase.audio_url ? (
-                        <div>
-                          <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">
-                            Audio
-                          </div>
-                          <AudioWaveform
-                            src={phrase.audio_url}
-                            height={40}
-                            waveColor="#94a3b8"
-                            progressColor="#3b82f6"
-                            cursorColor="#1d4ed8"
-                          />
-                        </div>
-                      ) : null}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Audio:</span>
+                        <InlineAudioPlayer src={phrase.audio_url} />
+                      </div>
                     </div>
                   )}
                   <div className="flex items-center gap-2 border-t border-gray-200 dark:border-gray-700 pt-3">

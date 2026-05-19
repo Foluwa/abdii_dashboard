@@ -27,7 +27,8 @@ import {
   ActiveFilterChips,
   StickyBulkActionBar,
 } from '@/components/admin/layout';
-import { FiGlobe, FiBarChart2, FiCheckCircle, FiTrash2 } from 'react-icons/fi';
+import { FiGlobe, FiBarChart2, FiCheckCircle, FiTrash2, FiVolume2 } from 'react-icons/fi';
+import InlineAudioPlayer from '@/components/ui/audio/InlineAudioPlayer';
 
 export default function SentencesPage() {
   const router = useRouter();
@@ -345,16 +346,7 @@ export default function SentencesPage() {
       label: 'Audio',
       align: 'center',
       render: (value, row) => (
-        (value || (row as any).audio_key) ? (
-          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
-            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-            Yes
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-            No
-          </span>
-        )
+        <InlineAudioPlayer src={(value as string) || (row as any).audio_url || null} />
       ),
     },
     {
