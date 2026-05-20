@@ -53,7 +53,7 @@ function isAudioAsset(assetType: string) {
 
 function MediaPreview({ storageKey, assetType }: { storageKey: string; assetType: string }) {
   if (!isAudioAsset(assetType)) return <span className="text-xs text-gray-400">—</span>;
-  const baseUrl = process.env.NEXT_PUBLIC_MEDIA_BASE_URL || (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000');
+  const baseUrl = process.env.NEXT_PUBLIC_MEDIA_BASE_URL || (process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.abidii.app');
   const src = `${baseUrl}/api/v1/media/${encodeURIComponent(storageKey)}`;
   return (
     <audio

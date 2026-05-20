@@ -42,7 +42,7 @@ function browserCountryCode() {
 }
 
 export default function BillingPlansCard() {
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://api.abidii.app";
   const configuredCountry = (process.env.NEXT_PUBLIC_BILLING_COUNTRY_CODE || "").trim().toUpperCase();
 
   const countryOptions = React.useMemo(

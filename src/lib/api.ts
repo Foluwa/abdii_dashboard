@@ -11,7 +11,7 @@
 import axios, { AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
 
 // Get API base URL from environment variable
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.abidii.app';
 
 /**
  * Main API client instance
@@ -162,7 +162,9 @@ apiClient.interceptors.response.use(
       error.response?.status === 401 &&
       (error.response.data as any)?.detail === 'Invalid admin token'
     ) {
-      console.warn('⚠️ Invalid admin monitoring token; skipping JWT refresh.');
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('⚠️ Invalid admin monitoring token; skipping JWT refresh.');
+      }
       return Promise.reject(error);
     }
 
@@ -172,7 +174,9 @@ apiClient.interceptors.response.use(
     
     // ONLY refresh token on 401 Unauthorized (not 403, 422, or other errors)
     if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
-      console.warn('⚠️ Got 401 error, attempting token refresh...');
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('⚠️ Got 401 error, attempting token refresh...');
+      }
       
       if (isRefreshing) {
         // Wait for the refresh to complete
@@ -195,7 +199,9 @@ apiClient.interceptors.response.use(
         const refreshToken = sessionStorage.getItem('refresh_token');
         
         if (!refreshToken) {
-          console.error('❌ No refresh token available, cannot refresh');
+          if (process.env.NODE_ENV === 'development') {
+            console.error('❌ No refresh token available, cannot refresh');
+          }
           throw new Error('No refresh token available');
         }
 
@@ -226,7 +232,9 @@ apiClient.interceptors.response.use(
         // Retry the original request
         return apiClient(originalRequest);
       } catch (refreshError) {
-        console.error('❌ Token refresh failed:', refreshError);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('❌ Token refresh failed:', refreshError);
+        }
         processQueue(refreshError as Error, null);
         isRefreshing = false;
 
@@ -237,7 +245,9 @@ apiClient.interceptors.response.use(
         // Only redirect if we're not already on the login page
         const currentPath = window.location.pathname;
         if (currentPath !== '/' && currentPath !== '/signin') {
-          console.error('Token refresh failed, redirecting to login');
+          if (process.env.NODE_ENV === 'development') {
+            console.error('Token refresh failed, redirecting to login');
+          }
           // Use setTimeout to avoid affecting current request flow
           setTimeout(() => {
             window.location.href = '/';

@@ -261,13 +261,34 @@ const renderAlignmentJobBadge = (proverb: Proverb) => {
       ? `Latest auto-alignment job ${proverb.alignment_job_status} via ${providerDetail}`
       : `Latest auto-alignment job ${proverb.alignment_job_status}`;
 
+  const badgeLabel = proverb.alignment_job_status === "failed"
+    ? "Align Failed"
+    : `Align ${proverb.alignment_job_status.charAt(0).toUpperCase() + proverb.alignment_job_status.slice(1)}`;
+
+  const errorSnippet =
+    proverb.alignment_job_status === "failed" && proverb.alignment_job_error
+      ? proverb.alignment_job_error.length > 80
+        ? proverb.alignment_job_error.slice(0, 80) + "…"
+        : proverb.alignment_job_error
+      : null;
+
   return (
-    <span
-      title={detail}
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClasses[proverb.alignment_job_status]}`}
-    >
-      Align {proverb.alignment_job_status.charAt(0).toUpperCase() + proverb.alignment_job_status.slice(1)}
-    </span>
+    <div className="flex flex-col items-start gap-1">
+      <span
+        title={detail}
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClasses[proverb.alignment_job_status]}`}
+      >
+        {badgeLabel}
+      </span>
+      {errorSnippet && (
+        <p
+          className="text-[11px] text-red-600 dark:text-red-400 leading-tight max-w-[200px] truncate"
+          title={proverb.alignment_job_error ?? undefined}
+        >
+          {errorSnippet}
+        </p>
+      )}
+    </div>
   );
 };
 

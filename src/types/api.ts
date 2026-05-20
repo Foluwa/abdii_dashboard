@@ -251,6 +251,12 @@ export interface Proverb {
   alignment_job_engine?: string | null;
   alignment_job_error?: string | null;
   alignment_job_updated_at?: string | null;
+  pending_audio_version?: {
+    id: string;
+    audio_url: string | null;
+    status: string;
+    created_at: string | null;
+  } | null;
   yoruba_prompt?: string | null;
   yoruba_answer?: string | null;
   is_game_ready?: boolean;

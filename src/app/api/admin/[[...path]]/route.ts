@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
  * JavaScript bundles via NEXT_PUBLIC_ prefix.
  */
 
-const BACKEND_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+const BACKEND_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.abidii.app';
 const ADMIN_TOKEN = process.env.ADMIN_MONITORING_TOKEN || process.env.NEXT_PUBLIC_ADMIN_MONITORING_TOKEN || '';
 
 async function handleRequest(request: NextRequest, method: string) {
