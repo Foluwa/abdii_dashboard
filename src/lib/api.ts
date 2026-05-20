@@ -29,8 +29,18 @@ const _apiClient = axios.create({
  * In-flight request deduplication cache.
  * Prevents identical GET requests from being fired in parallel
  * (e.g. React StrictMode double-mount, multiple hooks).
+ * Capped at 100 entries; entries evicted after 30s TTL.
  */
 const inFlightCache = new Map<string, Promise<unknown>>();
+const IN_FLIGHT_MAX_SIZE = 100;
+const IN_FLIGHT_TTL_MS = 30_000;
+
+function evictOldestFromCache() {
+  if (inFlightCache.size > IN_FLIGHT_MAX_SIZE) {
+    const oldest = inFlightCache.keys().next().value;
+    if (oldest) inFlightCache.delete(oldest);
+  }
+}
 
 function buildCacheKey(url: string, params?: unknown): string {
   return `GET:${url}:${params ? JSON.stringify(params) : ''}`;
@@ -45,10 +55,17 @@ function dedupedGet<T = unknown>(url: string, config?: AxiosRequestConfig): Prom
   if (cached) {
     return cached as Promise<{ data: T }>;
   }
+  evictOldestFromCache();
   const promise = _originalGet<T>(url, config).finally(() => {
     inFlightCache.delete(key);
   });
   inFlightCache.set(key, promise);
+  // TTL: evict if still pending after 30s (stuck/hung request)
+  setTimeout(() => {
+    if (inFlightCache.get(key) === promise) {
+      inFlightCache.delete(key);
+    }
+  }, IN_FLIGHT_TTL_MS);
   return promise;
 }
 
@@ -179,9 +196,22 @@ apiClient.interceptors.response.use(
       }
       
       if (isRefreshing) {
-        // Wait for the refresh to complete
+        // Wait for the refresh to complete (with 30s timeout)
         return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
+          const timeout = setTimeout(() => {
+            const idx = failedQueue.findIndex((entry) => entry.reject === reject);
+            if (idx >= 0) failedQueue.splice(idx, 1);
+            reject(new Error('Token refresh timeout'));
+          }, 30000);
+          const wrappedResolve = (value?: unknown) => {
+            clearTimeout(timeout);
+            resolve(value);
+          };
+          const wrappedReject = (reason?: unknown) => {
+            clearTimeout(timeout);
+            reject(reason);
+          };
+          failedQueue.push({ resolve: wrappedResolve, reject: wrappedReject });
         })
           .then(() => {
             return apiClient(originalRequest);
@@ -238,8 +268,10 @@ apiClient.interceptors.response.use(
         processQueue(refreshError as Error, null);
         isRefreshing = false;
 
-        // Clear auth data immediately to prevent further refresh attempts
-        sessionStorage.clear();
+        // Clear only auth keys — preserve UI preferences and other non-auth state
+        for (const key of ['access_token', 'refresh_token', 'token_expiry']) {
+          sessionStorage.removeItem(key);
+        }
         document.cookie = 'user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
         
         // Only redirect if we're not already on the login page
