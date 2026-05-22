@@ -23,6 +23,7 @@ import {
   listVerifiedPromotionManifests,
   promoteMlModelVersion,
   rollbackMlModelVersion,
+  queueTrainingJob,
   updateVerifiedPromotionCandidates,
   type MlModelVersion,
   type MlReadinessResponse,
@@ -190,6 +191,26 @@ export function MLTrainingOverviewPage() {
   const latestSmoke = useMemo(() => getLatestSmoke(jobs), [jobs]);
   const runningJobs = readiness?.training_jobs.running || 0;
   const succeededJobs = readiness?.training_jobs.succeeded || 0;
+  const [trainingLang, setTrainingLang] = useState("yor");
+  const [trainingLoading, setTrainingLoading] = useState(false);
+
+  const queueTraining = useCallback(async () => {
+    setTrainingLoading(true);
+    try {
+      const job = await queueTrainingJob({
+        language_code: trainingLang as "yor" | "eng",
+        model_status_target: "staging",
+      });
+      alert(`Training job queued: ${job.id}`);
+      await refresh();
+    } catch (err: any) {
+      alert(err?.response?.data?.detail?.message ?? err?.message ?? "Failed to queue training.");
+    } finally {
+      setTrainingLoading(false);
+    }
+  }, [trainingLang, refresh]);
+
+  const queueTraining = useCallback(async () => {
 
   return (
     <div className="space-y-6 p-6">
@@ -263,9 +284,29 @@ export function MLTrainingOverviewPage() {
 
         <Panel title="Training Trigger">
           <div className="space-y-3 text-sm text-gray-600 dark:text-gray-400">
-            <p>Full training launch remains intentionally disabled from the dashboard until backend execution is approved.</p>
-            <Button disabled size="sm">Start Training Coming Soon</Button>
+            <p>Queue a new handwriting training job on Lambda GPU. Requires dataset readiness (300+ samples per class).</p>
+            <div className="flex flex-wrap gap-2">
+              <select value={trainingLang} onChange={(event) => setTrainingLang(event.target.value)} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white">
+                <option value="yor">Yoruba</option>
+                <option value="eng">English</option>
+              </select>
+              <Button size="sm" onClick={() => void queueTraining()} disabled={trainingLoading}>
+                {trainingLoading ? "Queueing..." : "Queue Training Job"}
+              </Button>
+            </div>
           </div>
+        </Panel>
+        <Panel title="Model Versions" action={<Link className="text-sm font-medium text-brand-600" href="/system/ml-training/models">View all</Link>}>
+          {models.length > 0 ? (
+            <div className="space-y-2 text-sm">
+              {models.slice(0, 5).map((m) => (
+                <div key={m.id} className="flex items-center justify-between">
+                  <span className="text-gray-700 dark:text-gray-300">{m.model_name || m.id} ({m.language_code})</span>
+                  <StatusPill status={String(m.status || "unknown")} />
+                </div>
+              ))}
+            </div>
+          ) : <div className="text-sm text-gray-500 dark:text-gray-400">No model versions yet.</div>}
         </Panel>
       </div>
     </div>

@@ -196,6 +196,30 @@ export async function getMlReadiness(threshold = 300) {
   return res.data;
 }
 
+export async function queueTrainingJob(payload: {
+  job_type?: "handwriting_tinyvgg_train" | "handwriting_tinyvgg_retrain";
+  language_code?: "yor" | "eng";
+  dataset_path?: string;
+  model_status_target?: "staging" | "production";
+  executor_type?: "local" | "lambda";
+  max_attempts?: number;
+  parameters?: Record<string, unknown>;
+}) {
+  const res = await apiClient.post<MlTrainingJob>(
+    "/api/v1/admin/ml/training-jobs",
+    {
+      job_type: payload.job_type ?? "handwriting_tinyvgg_train",
+      language_code: payload.language_code ?? "yor",
+      dataset_path: payload.dataset_path ?? null,
+      model_status_target: payload.model_status_target ?? "staging",
+      executor_type: payload.executor_type ?? null,
+      max_attempts: payload.max_attempts ?? null,
+      parameters: payload.parameters ?? null,
+    }
+  );
+  return res.data;
+}
+
 export async function listMlTrainingJobs(params?: {
   status?: string;
   language_code?: string;
