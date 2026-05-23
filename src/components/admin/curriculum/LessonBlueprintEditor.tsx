@@ -464,6 +464,18 @@ function getStepTypeOptions(lessonKind: string): Array<{ value: string; label: s
   }
 }
 
+const STEP_TYPE_DESCRIPTIONS: Record<string, string> = {
+  lessonStart: 'Intro screen with a title, image, and optional audio. Sets the context before the activity begins. Shows a "Start" button.',
+  recognitionTask: 'Multiple-choice quiz. Shows a prompt (text/audio/image) and several options. User picks the correct one. Uses options[] for answer choices.',
+  listeningTiles: 'Audio-focused grid. Shows tappable tiles that play sounds. User listens and selects the matching tile. Great for ear training.',
+  matchingPairs: 'Drag-and-drop or tap-to-match pairs. Shows English↔Yoruba word pairs. Uses pairs[] for the match items. Failed matches shake.',
+  conceptCheck: 'A comprehension question after teaching content. Tests understanding with a single question. Often used mid-lesson.',
+  cultureTip: 'Informational card about cultural context. No interaction required. Shows text + optional image. Used to share cultural notes.',
+  guessMeaning: 'Shows a word and asks the user to guess the meaning before revealing. Used in reading practice.',
+  wordBuilder: 'Interactive word construction. User builds words from syllables or letters. Used in reading and spelling lessons.',
+  dialogueContext: 'Contextual dialogue scenario. User engages with a simulated conversation. Used in reading practice.',
+};
+
 function normalizeValidationPath(path: string | null | undefined): string {
   return (path || '').trim().replace(/^\$\./, '');
 }
@@ -3550,17 +3562,22 @@ export function LessonBlueprintEditor({
                            </button>
                          </div>
                        </div>
-                      <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Type</label>
-                          <StyledSelect
-                            value={stepType}
-                            onChange={(event) => updateStepField(index, 'type', event.target.value)}
-                            options={stepTypeOptions}
-                            placeholder=""
-                            fullWidth
-                          />
-                        </div>
+                       <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                         <div>
+                           <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Type</label>
+                           <StyledSelect
+                             value={stepType}
+                             onChange={(event) => updateStepField(index, 'type', event.target.value)}
+                             options={stepTypeOptions}
+                             placeholder=""
+                             fullWidth
+                           />
+                           {STEP_TYPE_DESCRIPTIONS[stepType] && (
+                             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                               {STEP_TYPE_DESCRIPTIONS[stepType]}
+                             </p>
+                           )}
+                         </div>
                         <div className="lg:col-span-2">
                           <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Title</label>
                           <input
