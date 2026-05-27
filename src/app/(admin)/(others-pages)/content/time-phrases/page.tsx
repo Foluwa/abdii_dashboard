@@ -1831,7 +1831,7 @@ export default function TimePhrasesPage() {
                   alignmentLoading ? (
                     <div className="text-sm text-gray-600 dark:text-gray-400">Loading alignment...</div>
                   ) : (
-                    <Alert variant="error" title="Error" message={{alignmentError}} />
+                    <Alert variant="error" title="Error" message={alignmentError} />
                   )
                 )}
 

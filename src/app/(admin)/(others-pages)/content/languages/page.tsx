@@ -133,7 +133,7 @@ export default function LanguagesPage() {
     return (
       <div className="p-6">
         <PageBreadCrumb pageTitle="Languages" />
-        <Alert variant="error" title="Error" message={Failed to load languages. Please check your API connection.} />
+        <Alert variant="error" title="Error" message="Failed to load languages. Please check your API connection." />
       </div>
     );
   }
