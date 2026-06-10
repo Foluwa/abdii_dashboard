@@ -594,7 +594,8 @@ export function MLModelVersionsPage() {
                 <tr className="text-left text-xs uppercase text-gray-500 dark:text-gray-400">
                   <th className="px-3 py-2">Status</th>
                   <th className="px-3 py-2">Language</th>
-                  <th className="px-3 py-2">Version</th>
+                   <th className="px-3 py-2">Architecture</th>
+                   <th className="px-3 py-2">Version</th>
                   <th className="px-3 py-2">Model</th>
                   <th className="px-3 py-2">Validation</th>
                   <th className="px-3 py-2">Test</th>
@@ -612,8 +613,21 @@ export function MLModelVersionsPage() {
                   return (
                     <tr key={model.id || `${model.model_name}-${index}`}>
                       <td className="px-3 py-3"><StatusPill status={model.status} /></td>
-                      <td className="px-3 py-3 text-gray-700 dark:text-gray-300">{model.language_code || "-"}</td>
-                      <td className="px-3 py-3 text-gray-700 dark:text-gray-300">{model.version || "-"}</td>
+                       <td className="px-3 py-3 text-gray-700 dark:text-gray-300">{model.language_code || "-"}</td>
+                       <td className="px-3 py-3 font-mono text-xs text-gray-500 dark:text-gray-400">
+                         {(() => {
+                           try {
+                             const hp = typeof model.metrics === 'string' ? JSON.parse(model.metrics) : (model.metrics || {});
+                             const pp = hp?.preprocessing_config || {};
+                             const ap = hp?.artifact_paths || {};
+                             const im = pp?.image_size || '-';
+                             const cm = pp?.color_mode || '-';
+                             const ch = hp?.class_mapping_hash ? hp.class_mapping_hash.slice(0,8) : '-';
+                             return `${im}px ${cm} · ${Object.keys(ap).length} files · hash ${ch}`;
+                           } catch { return '—'; }
+                         })()}
+                       </td>
+                       <td className="px-3 py-3 text-gray-700 dark:text-gray-300">{model.version || "-"}</td>
                       <td className="px-3 py-3 text-gray-700 dark:text-gray-300">{model.model_name || model.model_type || "-"}</td>
                       <td className="px-3 py-3 text-gray-700 dark:text-gray-300">{formatMetricPercent(model.validation_accuracy)}</td>
                       <td className="px-3 py-3 text-gray-700 dark:text-gray-300">{formatMetricPercent(model.test_accuracy)}</td>
