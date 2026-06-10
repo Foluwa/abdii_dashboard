@@ -167,10 +167,15 @@ const AppHeader: React.FC = () => {
 
             {/* <!-- Environment Badge --> */}
             <div className="hidden sm:block">
-              {process.env.NODE_ENV === 'production' ? (
+              {process.env.NEXT_PUBLIC_APP_ENV === 'production' ? (
                 <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-red-500 to-orange-500 text-white shadow-sm">
                   <span className="w-1.5 h-1.5 bg-white rounded-full mr-1.5 animate-pulse"></span>
                   PROD
+                </span>
+              ) : process.env.NEXT_PUBLIC_APP_ENV === 'staging' ? (
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-sm">
+                  <span className="w-1.5 h-1.5 bg-white rounded-full mr-1.5 animate-pulse"></span>
+                  STAGING
                 </span>
               ) : (
                 <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-sm">
