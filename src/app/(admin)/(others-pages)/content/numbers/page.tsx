@@ -378,7 +378,7 @@ export default function NumbersPage() {
           language_code: voicePrefix,
           is_active: true,
           dedupe_aliases: true,
-          page_size: 200,
+          page_size: 100,
         },
       });
       const voices = response.data.items || response.data.voices || [];
