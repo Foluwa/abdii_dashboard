@@ -186,8 +186,12 @@ export function DictionaryGoogleSheetsBulkImport({ onImportComplete }: { onImpor
         try {
           const batch = await getDictionaryImportBatch(batchFromUrl);
           if (batch.status === 'validation_failed' || batch.status === 'apply_failed') {
-            setActiveBatchId(batchFromUrl);
+            const report = await getDictionaryImportValidationReport(batchFromUrl);
+            setValidation(report);
+            setActiveBatchId(null);
           } else if (batch.status === 'validated') {
+            const report = await getDictionaryImportValidationReport(batchFromUrl);
+            setValidation(report);
             setActiveBatchId(null);
           } else if (batch.status === 'validating' || batch.status === 'applying') {
             setActiveBatchId(batchFromUrl);
