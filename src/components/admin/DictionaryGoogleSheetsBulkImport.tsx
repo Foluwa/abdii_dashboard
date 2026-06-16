@@ -9,6 +9,7 @@ import { useToast } from '@/contexts/ToastContext';
 import {
   applyDictionaryImport,
   getDictionaryImportBatch,
+  getDictionaryImportValidationReport,
   listDictionaryImportBatches,
   validateDictionaryImportFromGoogleSheet,
 } from '@/lib/dictionaryImportApi';
@@ -223,13 +224,13 @@ export function DictionaryGoogleSheetsBulkImport({ onImportComplete }: { onImpor
       while (Date.now() - startedAt < timeoutMs) {
                 const batch = await getDictionaryImportBatch(batchId);
                 if (batch.status === 'validated' || batch.status === 'validation_failed') {
-                  const report = batch as any;
+                  const report = await getDictionaryImportValidationReport(batchId);
                   setValidation(report);
           setActiveBatchId(null);
           // Remove batch from URL
           const next = new URLSearchParams(searchParams.toString());
           next.delete('batch');
-          router.replace(`${window.location.pathname}?${next.toString()}`, { scroll: false });
+          router.replace(`/content/words?${next.toString()}`, { scroll: false });
           if (report.valid) {
             toast.success(`Validation passed. ${report.counters.staged_rows} rows ready.`);
           } else {

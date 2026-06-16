@@ -61,3 +61,11 @@ export async function getDictionaryImportBatch(batchId: string) {
   );
   return res.data;
 }
+
+export async function getDictionaryImportValidationReport(batchId: string) {
+  const res = await apiClient.get<DictionaryImportValidateResponse>(
+    `/api/v1/admin/dictionary-import/batches/${batchId}/validation-report`
+  );
+  return res.data;
+}
+
