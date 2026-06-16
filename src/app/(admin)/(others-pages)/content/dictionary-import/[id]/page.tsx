@@ -6,8 +6,13 @@ import { useParams } from 'next/navigation';
 import PageBreadCrumb from '@/components/common/PageBreadCrumb';
 import StatusBadge from '@/components/admin/StatusBadge';
 import { useToast } from '@/contexts/ToastContext';
-import { getDictionaryImportBatch } from '@/lib/dictionaryImportApi';
-import type { DictionaryImportBatchDetail } from '@/types/dictionaryImport';
+import {
+  getDictionaryImportBatch,
+  getDictionaryImportValidationReport,
+  applyDictionaryImport,
+} from '@/lib/dictionaryImportApi';
+import type { DictionaryImportBatchDetail, DictionaryImportValidateResponse } from '@/types/dictionaryImport';
+
 
 function formatDate(value?: string | null) {
   if (!value) return '-';
@@ -34,13 +39,33 @@ export default function DictionaryImportBatchDetailPage() {
   const params = useParams<{ id: string }>();
   const toast = useToast();
   const [detail, setDetail] = useState<DictionaryImportBatchDetail | null>(null);
+  const [validation, setValidation] = useState<DictionaryImportValidateResponse | null>(null);
+  const [applying, setApplying] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const handleImport = async () => {
+    if (!params.id) return;
+    setApplying(true);
+    try {
+      await applyDictionaryImport(params.id);
+      toast.success('Import applied successfully.');
+      const d = await getDictionaryImportBatch(params.id);
+      setDetail(d);
+      setValidation(null);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail ?? error?.message ?? 'Import failed');
+    } finally {
+      setApplying(false);
+    }
+  };
 
   useEffect(() => {
     const run = async () => {
       try {
         const result = await getDictionaryImportBatch(params.id);
         setDetail(result);
+        const report = await getDictionaryImportValidationReport(params.id);
+        setValidation(report);
       } catch (error: any) {
         toast.error(error?.response?.data?.detail ?? error?.message ?? 'Failed to load batch');
       } finally {
@@ -73,6 +98,16 @@ export default function DictionaryImportBatchDetailPage() {
               <div className="flex items-center gap-3">
                 {renderStatus(detail.status)}
                 <span className="font-mono text-xs text-gray-500 dark:text-gray-400">{detail.id}</span>
+                {detail.status === 'validated' && (
+                  <button
+                    type="button"
+                    onClick={handleImport}
+                    disabled={applying}
+                    className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {applying ? 'Importing...' : `Import ${validation?.counters?.staged_rows ?? 0} rows`}
+                  </button>
+                )}
               </div>
 
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
