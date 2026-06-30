@@ -4,6 +4,8 @@ import type {
   NotificationBroadcastRequest,
   NotificationResponse,
   NotificationLogItem,
+  DailyContentFeedItem,
+  AudienceSnapshotItem,
 } from '@/types/notifications';
 
 export async function sendNotification(payload: NotificationSendRequest) {
@@ -47,6 +49,30 @@ export async function listNotificationHistory(params?: {
   const suffix = usp.toString() ? `?${usp.toString()}` : '';
   const res = await apiClient.get<NotificationLogItem[]>(
     `/api/v1/notifications/history${suffix}`
+  );
+  return res.data;
+}
+
+export async function listDailyContentFeed(params?: {
+  limit?: number;
+  offset?: number;
+}) {
+  const usp = new URLSearchParams();
+  if (params?.limit) usp.set('limit', String(params.limit));
+  if (params?.offset) usp.set('offset', String(params.offset));
+  const suffix = usp.toString() ? `?${usp.toString()}` : '';
+  const res = await apiClient.get<DailyContentFeedItem[]>(
+    `/api/v1/notifications/daily-content/feed${suffix}`
+  );
+  return res.data;
+}
+
+export async function getAudienceTrend(params?: { days?: number }) {
+  const usp = new URLSearchParams();
+  if (params?.days) usp.set('days', String(params.days));
+  const suffix = usp.toString() ? `?${usp.toString()}` : '';
+  const res = await apiClient.get<AudienceSnapshotItem[]>(
+    `/api/v1/notifications/audience-trend${suffix}`
   );
   return res.data;
 }

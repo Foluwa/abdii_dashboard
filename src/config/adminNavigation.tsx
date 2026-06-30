@@ -99,6 +99,7 @@ export const mainNavigationItems: AdminNavItem[] = [
     subItems: [
       { name: "Compose", path: "/notifications" },
       { name: "History", path: "/notifications/history" },
+      { name: "Daily Content", path: "/notifications/daily" },
     ],
   },
   {
