@@ -53,3 +53,54 @@ export interface AudienceSnapshotItem {
   android_eligible: number;
   ios_eligible: number;
 }
+
+export interface TeaserQuizFeedItem {
+  quiz_log_id: string;
+  word_text: string;
+  language_code: string;
+  prompt_text: string;
+  sent_at: string;
+  opened_at: string | null;
+  answered_at: string | null;
+  was_correct: boolean | null;
+  xp_awarded: number;
+}
+
+export interface TeaserQuizStats {
+  total_sent: number;
+  total_opened: number;
+  total_answered: number;
+  total_correct: number;
+}
+
+export interface DailyWordOverrideRequest {
+  content_date: string; // YYYY-MM-DD
+  language_code: string;
+  word_id: string;
+}
+
+export interface DailyWordOverrideResponse {
+  content_log_id: string;
+  content_date: string;
+  language_code: string;
+  word_id: string;
+  word_text: string;
+}
+
+export interface NotificationSchedule {
+  daily_word_time: string; // HH:MM, 24h UTC
+  teaser_quiz_time: string;
+}
+
+export interface NotificationScheduleUpdate {
+  daily_word_time?: string;
+  teaser_quiz_time?: string;
+}
+
+export interface DictionarySearchResult {
+  id: string;
+  lemma: string;
+  pos: string;
+  ipas: string[];
+  glosses: string[];
+}
