@@ -130,8 +130,7 @@ const CountryMap: React.FC<CountryMapProps> = ({ mapColor }) => {
             attribute: "fill",
             values: regionValues,
             // Use existing palette already used elsewhere in this file
-            scale: [mapColor || "#D0D5DD", "#465FFF"],
-            // Linear provides clearer contrast for small count ranges (e.g. 1-5 users)
+            scale: ["#BAC5FF", "#465FFF"],
             normalizeFunction: "linear",
           },
         ],
