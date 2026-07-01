@@ -7,6 +7,7 @@ import type { ApexOptions } from 'apexcharts';
 import PageBreadCrumb from '@/components/common/PageBreadCrumb';
 import Pagination from '@/components/tables/Pagination';
 import StatusBadge from '@/components/admin/StatusBadge';
+import DatePicker from '@/components/form/date-picker';
 import { useToast } from '@/contexts/ToastContext';
 import {
   listDailyContentFeed,
@@ -275,13 +276,13 @@ export default function DailyContentNotificationsPage() {
         </p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Date</label>
-            <input
-              type="date"
-              value={overrideDate}
-              min={todayIso()}
-              onChange={(e) => setOverrideDate(e.target.value)}
-              className="block h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+            <DatePicker
+              id="override-date-picker"
+              label="Date"
+              placeholder="Select date"
+              defaultDate={overrideDate}
+              minDate={todayIso()}
+              onChange={(_dates, dateStr) => setOverrideDate(dateStr)}
             />
           </div>
           <div>
