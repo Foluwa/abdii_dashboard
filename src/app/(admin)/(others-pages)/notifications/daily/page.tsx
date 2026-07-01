@@ -8,6 +8,7 @@ import PageBreadCrumb from '@/components/common/PageBreadCrumb';
 import Pagination from '@/components/tables/Pagination';
 import StatusBadge from '@/components/admin/StatusBadge';
 import DatePicker from '@/components/form/date-picker';
+import { useLanguages } from '@/hooks/useApi';
 import { useToast } from '@/contexts/ToastContext';
 import {
   listDailyContentFeed,
@@ -67,6 +68,7 @@ function isUpcoming(item: DailyContentFeedItem): boolean {
 
 export default function DailyContentNotificationsPage() {
   const toast = useToast();
+  const { languages } = useLanguages();
   const [feed, setFeed] = useState<DailyContentFeedItem[]>([]);
   const [trend, setTrend] = useState<AudienceSnapshotItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -240,21 +242,23 @@ export default function DailyContentNotificationsPage() {
         </p>
         <div className="grid gap-4 sm:grid-cols-3 sm:items-end">
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Daily Word</label>
-            <input
-              type="time"
-              value={dailyWordTime}
-              onChange={(e) => setDailyWordTime(e.target.value)}
-              className="block h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+            <DatePicker
+              id="send-time-daily-word"
+              mode="time"
+              label="Daily Word"
+              placeholder="HH:MM"
+              defaultDate={dailyWordTime}
+              onChange={(_dates, timeStr) => setDailyWordTime(timeStr)}
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Teaser Quiz</label>
-            <input
-              type="time"
-              value={teaserQuizTime}
-              onChange={(e) => setTeaserQuizTime(e.target.value)}
-              className="block h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+            <DatePicker
+              id="send-time-teaser-quiz"
+              mode="time"
+              label="Teaser Quiz"
+              placeholder="HH:MM"
+              defaultDate={teaserQuizTime}
+              onChange={(_dates, timeStr) => setTeaserQuizTime(timeStr)}
             />
           </div>
           <button
@@ -287,13 +291,19 @@ export default function DailyContentNotificationsPage() {
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Language</label>
-            <input
-              type="text"
+            <select
               value={overrideLanguage}
-              onChange={(e) => setOverrideLanguage(e.target.value.toLowerCase())}
-              placeholder="yor"
+              onChange={(e) => setOverrideLanguage(e.target.value)}
               className="block h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
-            />
+            >
+              {(languages ?? []).length > 0
+                ? (languages ?? []).map((lang: { id: string; name: string; iso_639_3: string }) => (
+                    <option key={lang.id} value={lang.iso_639_3}>
+                      {lang.name} ({lang.iso_639_3})
+                    </option>
+                  ))
+                : <option value="yor">Yoruba (yor)</option>}
+            </select>
           </div>
           <div className="relative sm:col-span-2">
             <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Word</label>

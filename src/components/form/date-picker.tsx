@@ -12,6 +12,7 @@ type PropsType = {
   onChange?: Hook | Hook[];
   defaultDate?: DateOption;
   minDate?: DateOption;
+  dateFormat?: string;
   label?: string;
   placeholder?: string;
 };
@@ -23,25 +24,37 @@ export default function DatePicker({
   label,
   defaultDate,
   minDate,
+  dateFormat,
   placeholder,
 }: PropsType) {
   useEffect(() => {
-    const flatPickr = flatpickr(`#${id}`, {
-      mode: mode || "single",
-      static: true,
-      monthSelectorType: "static",
-      dateFormat: "Y-m-d",
-      defaultDate,
-      minDate,
-      onChange,
-    });
+    const isTimeMode = mode === "time";
+
+    const flatPickr = flatpickr(`#${id}`, isTimeMode
+      ? {
+          enableTime: true,
+          noCalendar: true,
+          dateFormat: dateFormat ?? "H:i",
+          time_24hr: true,
+          defaultDate,
+          onChange,
+        }
+      : {
+          mode: mode || "single",
+          static: true,
+          monthSelectorType: "static",
+          dateFormat: dateFormat ?? "Y-m-d",
+          defaultDate,
+          minDate,
+          onChange,
+        });
 
     return () => {
       if (!Array.isArray(flatPickr)) {
         flatPickr.destroy();
       }
     };
-  }, [mode, onChange, id, defaultDate, minDate]);
+  }, [mode, onChange, id, defaultDate, minDate, dateFormat]);
 
   return (
     <div>

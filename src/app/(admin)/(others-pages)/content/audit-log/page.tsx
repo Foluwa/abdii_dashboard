@@ -10,6 +10,7 @@ import { StyledSelect } from '@/components/ui/form/StyledSelect';
 import { Modal } from '@/components/ui/modal';
 import { useAdminAuditLogList } from '@/hooks/useApi';
 import type { AdminAuditLogItem } from '@/types/audit-log';
+import DatePicker from '@/components/form/date-picker';
 
 type TimePreset = 'all' | '24h' | '7d' | '30d' | 'custom';
 
@@ -328,28 +329,28 @@ export default function AdminAuditLogPage() {
 
             {timePreset === 'custom' && (
               <>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">From (UTC)</label>
-                  <input
-                    type="date"
-                    value={customFrom}
-                    onChange={(e) => {
+                <div className="mt-1">
+                  <DatePicker
+                    id="audit-log-from"
+                    label="From (UTC)"
+                    placeholder="From date"
+                    defaultDate={customFrom || undefined}
+                    onChange={(_dates, dateStr) => {
                       setPage(1);
-                      setCustomFrom(e.target.value);
+                      setCustomFrom(dateStr);
                     }}
-                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">To (UTC)</label>
-                  <input
-                    type="date"
-                    value={customTo}
-                    onChange={(e) => {
+                <div className="mt-1">
+                  <DatePicker
+                    id="audit-log-to"
+                    label="To (UTC)"
+                    placeholder="To date"
+                    defaultDate={customTo || undefined}
+                    onChange={(_dates, dateStr) => {
                       setPage(1);
-                      setCustomTo(e.target.value);
+                      setCustomTo(dateStr);
                     }}
-                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                   />
                 </div>
               </>
