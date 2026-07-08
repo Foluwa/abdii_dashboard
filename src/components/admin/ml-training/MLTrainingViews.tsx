@@ -224,28 +224,32 @@ export function MLTrainingOverviewPage() {
   const runningJobs = readiness?.training_jobs.running || 0;
   const succeededJobs = readiness?.training_jobs.succeeded || 0;
   const [trainingLang, setTrainingLang] = useState("yor");
-  const [trainingLoading, setTrainingLoading] = useState(false);
+  const [trainingLoading, setTrainingLoading] = useState<"train" | "retrain" | null>(null);
 
-  const queueTraining = useCallback(async () => {
-    setTrainingLoading(true);
-    try {
-      const job = await queueTrainingJob({
-        language_code: trainingLang as "yor" | "eng",
-        dataset_path: `datasets/training/${trainingLang}/alphabets/`,
-        model_status_target: "staging",
-        parameters: {
-          direct_training_dataset_ack: true,
-          readiness_min_count: 180,
-        },
-      });
-      alert(`Training job queued: ${job.id}`);
-      await refresh();
-    } catch (err: any) {
-      alert(err?.response?.data?.detail?.message ?? err?.message ?? "Failed to queue training.");
-    } finally {
-      setTrainingLoading(false);
-    }
-  }, [trainingLang, refresh]);
+  const queueTraining = useCallback(
+    async (jobType: "handwriting_tinyvgg_train" | "handwriting_tinyvgg_retrain") => {
+      setTrainingLoading(jobType === "handwriting_tinyvgg_retrain" ? "retrain" : "train");
+      try {
+        const job = await queueTrainingJob({
+          job_type: jobType,
+          language_code: trainingLang as "yor" | "eng",
+          dataset_path: `datasets/training/${trainingLang}/alphabets/`,
+          model_status_target: "staging",
+          parameters: {
+            direct_training_dataset_ack: true,
+            readiness_min_count: 180,
+          },
+        });
+        alert(`Training job queued: ${job.id}`);
+        await refresh();
+      } catch (err: any) {
+        alert(err?.response?.data?.detail?.message ?? err?.message ?? "Failed to queue training.");
+      } finally {
+        setTrainingLoading(null);
+      }
+    },
+    [trainingLang, refresh]
+  );
 
   return (
     <div className="space-y-6 p-6">
@@ -319,14 +323,17 @@ export function MLTrainingOverviewPage() {
 
         <Panel title="Training Trigger">
           <div className="space-y-3 text-sm text-gray-600 dark:text-gray-400">
-            <p>Queue a new handwriting training job on Lambda GPU from the R2 training dataset. Current Yoruba gate is 180+ samples per class.</p>
-            <div className="flex flex-wrap gap-2">
+            <p>Train uses the verified R2 dataset only. Retrain additionally pulls in real user corrections, low-confidence predictions, and incorrect predictions collected since the model went live, merged on top of the verified dataset. Current Yoruba gate is 180+ samples per class.</p>
+            <div className="flex flex-wrap items-center gap-2">
               <select value={trainingLang} onChange={(event) => setTrainingLang(event.target.value)} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white">
                 <option value="yor">Yoruba</option>
                 <option value="eng">English</option>
               </select>
-              <Button size="sm" onClick={() => void queueTraining()} disabled={trainingLoading}>
-                {trainingLoading ? "Queueing..." : "Queue Training Job"}
+              <Button size="sm" onClick={() => void queueTraining("handwriting_tinyvgg_train")} disabled={trainingLoading !== null}>
+                {trainingLoading === "train" ? "Queueing..." : "Queue Training Job"}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => void queueTraining("handwriting_tinyvgg_retrain")} disabled={trainingLoading !== null}>
+                {trainingLoading === "retrain" ? "Queueing..." : "Queue Retrain from Corrections"}
               </Button>
             </div>
           </div>
