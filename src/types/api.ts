@@ -130,6 +130,9 @@ export interface UserListItem {
   created_at: string;
   updated_at: string;
   last_login?: string;
+  last_login_at?: string | null;
+  last_request_at?: string | null;
+  last_activity_date?: string | null;
   is_active?: boolean;
   device_platform?: string | null;
   device_name?: string | null;
