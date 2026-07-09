@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useUsers } from "@/hooks/useApi";
+import { useDebounce } from "@/hooks/useDebounce";
 import { apiClient } from "@/lib/api";
 import type { UserRole } from "@/types/auth";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
@@ -45,9 +46,10 @@ export default function UsersPage() {
   const role = activeTab === "all" ? undefined : activeTab;
   const isActive = statusFilter === "all" ? undefined : statusFilter === "active";
   const provider = providerFilter === "all" ? undefined : providerFilter;
-  
-  const { users, isLoading, isError, refresh } = useUsers({ 
-    search, 
+  const debouncedSearch = useDebounce(search, 300);
+
+  const { users, isLoading, isError, refresh } = useUsers({
+    search: debouncedSearch,
     role, 
     page, 
     limit,

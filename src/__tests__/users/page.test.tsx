@@ -229,10 +229,16 @@ describe('UsersPage', () => {
       const searchInput = screen.getByPlaceholderText(/search by name/i);
       await userEvent.type(searchInput, 'test@email.com');
 
-      expect(mockUseUsers).toHaveBeenCalledWith(
-        expect.objectContaining({
-          search: 'test@email.com',
-        })
+      // Search is debounced (300ms) so the hook doesn't get the raw
+      // keystrokes; wait for the debounced value to propagate.
+      await waitFor(
+        () =>
+          expect(mockUseUsers).toHaveBeenCalledWith(
+            expect.objectContaining({
+              search: 'test@email.com',
+            })
+          ),
+        { timeout: 1000 }
       );
     });
 
