@@ -93,7 +93,7 @@ describe('UsersPage', () => {
       // Check column headers
       expect(tableQueries.getByText('User', { selector: 'th' })).toBeInTheDocument();
       expect(tableQueries.getByText('Device', { selector: 'th' })).toBeInTheDocument();
-      expect(tableQueries.getByText('Last Login', { selector: 'th' })).toBeInTheDocument();
+      expect(tableQueries.getByText('Last Request', { selector: 'th' })).toBeInTheDocument();
       expect(tableQueries.getByText('XP', { selector: 'th' })).toBeInTheDocument();
       expect(tableQueries.getByText('Role', { selector: 'th' })).toBeInTheDocument();
       expect(tableQueries.getByText('Status', { selector: 'th' })).toBeInTheDocument();
