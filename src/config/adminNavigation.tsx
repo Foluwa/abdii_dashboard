@@ -30,6 +30,12 @@ export const mainNavigationItems: AdminNavItem[] = [
     path: "/dashboard",
   },
   {
+    name: "Analytics",
+    icon: <PieChartIcon />,
+    path: "/analytics",
+    permission: "users:read",
+  },
+  {
     name: "Content",
     icon: <ListIcon />,
     permission: "content:read",
@@ -60,6 +66,10 @@ export const mainNavigationItems: AdminNavItem[] = [
         name: "Quick Practice",
         path: "/content/quick-practice",
       },
+      {
+        name: "Patterns",
+        path: "/content/patterns",
+      },
     ],
   },
   {
@@ -86,12 +96,6 @@ export const mainNavigationItems: AdminNavItem[] = [
         path: "/curriculum/assets",
       },
     ],
-  },
-  {
-    name: "Analytics",
-    icon: <PieChartIcon />,
-    path: "/analytics",
-    permission: "users:read",
   },
   {
     name: "Media",
@@ -137,6 +141,7 @@ export const mainNavigationItems: AdminNavItem[] = [
             permission: "system:read",
           },
           { name: "Idempotency", path: "/system/idempotency", permission: "system:read" },
+          { name: "Enforcement", path: "/enforcement", permission: "system:read" },
         ],
       },
       {
