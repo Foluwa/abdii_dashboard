@@ -36,14 +36,15 @@ export const mainNavigationItems: AdminNavItem[] = [
     subItems: [
       {
         name: "Library",
-        subItems: [
-          { name: "Words", path: "/content/words" },
-          { name: "Phrases", path: "/content/phrases" },
-          { name: "Time Phrases", path: "/content/time-phrases" },
-          { name: "Sentences", path: "/content/sentences" },
-          { name: "Proverbs", path: "/content/proverbs" },
-          { name: "Letters", path: "/content/letters" },
-          { name: "Numbers", path: "/content/numbers" },
+        path: "/content/library",
+        activePaths: [
+          "/content/words",
+          "/content/phrases",
+          "/content/time-phrases",
+          "/content/sentences",
+          "/content/proverbs",
+          "/content/letters",
+          "/content/numbers",
         ],
       },
       {
@@ -55,6 +56,10 @@ export const mainNavigationItems: AdminNavItem[] = [
         path: "/content/learning-items",
       },
       { name: "Languages", path: "/content/languages" },
+      {
+        name: "Quick Practice",
+        path: "/content/quick-practice",
+      },
     ],
   },
   {
@@ -64,15 +69,21 @@ export const mainNavigationItems: AdminNavItem[] = [
     subItems: [
       {
         name: "Courses",
-        subItems: [
-          { name: "All Courses", path: "/curriculum/courses" },
-          { name: "Publishing Readiness", path: "/curriculum/publishing" },
-        ],
+        path: "/curriculum/courses-hub",
+        activePaths: ["/curriculum/courses", "/curriculum/publishing"],
       },
       { name: "Curriculum Editor", path: "/curriculum/editor" },
       {
         name: "Lesson Blueprints",
         path: "/curriculum/lesson-blueprints",
+      },
+      {
+        name: "Lesson Import",
+        path: "/curriculum/lesson-import",
+      },
+      {
+        name: "Blueprint Assets",
+        path: "/curriculum/assets",
       },
     ],
   },
@@ -133,9 +144,7 @@ export const personalNavigationItems: AdminNavItem[] = [
   {
     name: "Settings",
     icon: <BoxCubeIcon />,
-    subItems: [
-      { name: "Profile", path: "/profile" },
-      { name: "Change Password", path: "/settings/change-password" },
-    ],
+    path: "/settings",
+    activePaths: ["/profile", "/settings/change-password"],
   },
 ];
