@@ -314,7 +314,7 @@ export function MLTrainingOverviewPage() {
             <div className="space-y-3 text-sm">
               <div className="flex items-center gap-2"><StatusPill status={latestSmoke.status} /><span className="text-gray-700 dark:text-gray-300">{latestSmoke.current_stage}</span></div>
               <div className="font-mono text-xs text-gray-500 dark:text-gray-400">{latestSmoke.id}</div>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2 text-gray-700 dark:text-gray-300 sm:grid-cols-2">
                 <div>Progress: {formatPercent(latestSmoke.progress_percentage)}</div>
                 <div>Executor: {latestSmoke.executor_type}</div>
                 <div>Instance: {latestSmoke.external_job_id || "-"}</div>
