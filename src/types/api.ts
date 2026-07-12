@@ -12,6 +12,17 @@ export interface SystemStatus {
   uptime_seconds: number;
 }
 
+export interface ServiceHealth {
+  name: string;
+  status: 'online' | 'offline' | 'not_configured';
+  detail: string | null;
+  latency_ms: number | null;
+}
+
+export interface ServicesStatusResponse {
+  services: ServiceHealth[];
+}
+
 export interface ConfigEntry {
   key: string;
   value_type: string;
