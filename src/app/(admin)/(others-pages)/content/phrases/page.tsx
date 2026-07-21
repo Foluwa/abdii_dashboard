@@ -1448,6 +1448,9 @@ export default function PhrasesPage() {
                         Status
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                        Alignment
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
                         Audio
                       </th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
@@ -1499,21 +1502,20 @@ export default function PhrasesPage() {
                           >
                             {phrase.is_published ? "Published" : "Draft"}
                           </span>
-                          {phrase.alignment_status && (
-                            <div className="mt-2">
-                              {renderPhraseAlignmentBadge(phrase)}
-                            </div>
-                          )}
                           {phrase.last_regeneration_status && (
                             <div className="mt-2">
                               {renderRegenerationBadge(phrase.last_regeneration_status, phrase.last_regeneration_error)}
                             </div>
                           )}
-                          {phrase.alignment_job_status && (
-                            <div className="mt-2">
-                              {renderAlignmentJobBadge(phrase)}
-                            </div>
-                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col items-start gap-2">
+                            {renderPhraseAlignmentBadge(phrase)}
+                            {renderAlignmentJobBadge(phrase)}
+                            {!phrase.alignment_status && !phrase.alignment_job_status && (
+                              <span className="text-sm text-gray-400 dark:text-gray-600">-</span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-6 py-4">
                           <InlineAudioPlayer src={phrase.audio_url} />

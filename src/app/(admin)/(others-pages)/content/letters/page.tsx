@@ -8,7 +8,7 @@ import Toast from "@/components/ui/toast/Toast";
 import Alert from "@/components/ui/alert/Alert";
 import { StyledSelect } from "@/components/ui/form/StyledSelect";
 import { ConfirmationModal } from "@/components/ui/modal/ConfirmationModal";
-import { AudioWaveform } from "@/components/ui/audio/AudioWaveform";
+import InlineAudioPlayer from "@/components/ui/audio/InlineAudioPlayer";
 import { GoogleSheetsBulkImport } from "@/components/admin/GoogleSheetsBulkImport";
 import {
   ContentPageHeader,
@@ -489,13 +489,7 @@ export default function LettersPage() {
                       <td className="px-6 py-4">
                         {letter.audio_url ? (
                           <div className="max-w-md">
-                            <AudioWaveform
-                              src={letter.audio_url}
-                              height={40}
-                              waveColor="#94a3b8"
-                              progressColor="#3b82f6"
-                              cursorColor="#1d4ed8"
-                            />
+                            <InlineAudioPlayer src={letter.audio_url} size="md" />
                           </div>
                         ) : (
                           <span className="text-xs text-gray-400 dark:text-gray-600">No audio</span>
