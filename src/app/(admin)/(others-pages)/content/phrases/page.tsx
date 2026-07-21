@@ -1273,6 +1273,30 @@ export default function PhrasesPage() {
         <ContentStatsCard label="With Audio" value={stats.withAudio} icon={FiVolume2} iconBgClass="bg-green-100 dark:bg-green-900/20" iconTextClass="text-green-600 dark:text-green-400" />
       </ContentStatsGrid>
 
+      {/* Bulk Import from Google Sheets (has built-in accordion) */}
+      {selectedLanguage && (
+        <GoogleSheetsBulkImport
+          contentType="phrases"
+          onImportComplete={() => fetchPhrases(selectedLanguage, page, alignmentFilter)}
+          defaultLanguageId={selectedLanguage}
+          defaultWorksheetTitle="yo_phrases"
+          expectedColumns={[
+            { name: 'source_row_key', required: true, description: 'Stable spreadsheet row key', example: 'phrase_yor_0001' },
+            { name: 'phrase', required: true, description: 'The phrase text', example: 'Báwo ni?' },
+            { name: 'translation', required: true, description: 'Translation', example: 'How are you?' },
+            { name: 'literal_translation', required: false, description: 'Word-by-word translation', example: 'How is it?' },
+            { name: 'romanization', required: false, description: 'Romanized version', example: 'Ba-wo ni' },
+            { name: 'difficulty_level', required: false, description: 'Difficulty 1-5', example: '2' },
+            { name: 'category', required: false, description: 'Category tag', example: 'greeting' },
+            { name: 'tags', required: false, description: 'Comma-separated tags', example: 'common,casual' },
+            { name: 'usage_context', required: false, description: 'When to use this phrase' },
+            { name: 'cultural_notes', required: false, description: 'Cultural context notes' },
+            { name: 'is_published', required: false, description: 'Publish state', example: 'true' },
+            { name: 'review_status', required: false, description: 'Editorial review status', example: 'approved' },
+          ]}
+        />
+      )}
+
       <ContentFiltersCard
         activeFilterCount={activeFilters.length}
         onClearAll={clearAllFilters}
@@ -1358,30 +1382,6 @@ export default function PhrasesPage() {
 
         <ActiveFilterChips filters={activeFilters} />
       </ContentFiltersCard>
-
-      {/* Bulk Import from Google Sheets (has built-in accordion) */}
-      {selectedLanguage && (
-        <GoogleSheetsBulkImport
-          contentType="phrases"
-          onImportComplete={() => fetchPhrases(selectedLanguage, page, alignmentFilter)}
-          defaultLanguageId={selectedLanguage}
-          defaultWorksheetTitle="yo_phrases"
-          expectedColumns={[
-            { name: 'source_row_key', required: true, description: 'Stable spreadsheet row key', example: 'phrase_yor_0001' },
-            { name: 'phrase', required: true, description: 'The phrase text', example: 'Báwo ni?' },
-            { name: 'translation', required: true, description: 'Translation', example: 'How are you?' },
-            { name: 'literal_translation', required: false, description: 'Word-by-word translation', example: 'How is it?' },
-            { name: 'romanization', required: false, description: 'Romanized version', example: 'Ba-wo ni' },
-            { name: 'difficulty_level', required: false, description: 'Difficulty 1-5', example: '2' },
-            { name: 'category', required: false, description: 'Category tag', example: 'greeting' },
-            { name: 'tags', required: false, description: 'Comma-separated tags', example: 'common,casual' },
-            { name: 'usage_context', required: false, description: 'When to use this phrase' },
-            { name: 'cultural_notes', required: false, description: 'Cultural context notes' },
-            { name: 'is_published', required: false, description: 'Publish state', example: 'true' },
-            { name: 'review_status', required: false, description: 'Editorial review status', example: 'approved' },
-          ]}
-        />
-      )}
 
       <StickyBulkActionBar
         selectedCount={selectedPhrases.length}

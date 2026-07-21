@@ -287,6 +287,24 @@ export default function LettersPage() {
         </ContentStatsGrid>
       )}
 
+      {/* Bulk Import from Google Sheets (has built-in accordion) */}
+      {selectedLanguage && (
+        <GoogleSheetsBulkImport
+          contentType="letters"
+          onImportComplete={() => fetchLetters(selectedLanguage)}
+          defaultLanguageId={selectedLanguage}
+          defaultWorksheetTitle="yo_letters"
+          expectedColumns={[
+            { name: "source_row_key", required: true, description: "Stable spreadsheet row key", example: "letter_yor_001" },
+            { name: "glyph", required: true, description: "Letter or digraph", example: "Ẹ" },
+            { name: "display_name", required: true, description: "Display name", example: "Ẹ" },
+            { name: "is_digraph", required: false, description: "TRUE for multi-character letters", example: "FALSE" },
+            { name: "order_index", required: true, description: "Sort order", example: "7" },
+            { name: "review_status", required: false, description: "Editorial review status", example: "approved" },
+          ]}
+        />
+      )}
+
       <ContentFiltersCard>
         <div className="max-w-md">
           <label className="mb-2 block text-xs font-medium text-gray-700 dark:text-gray-300">
@@ -306,24 +324,6 @@ export default function LettersPage() {
           />
         </div>
       </ContentFiltersCard>
-
-      {/* Bulk Import from Google Sheets (has built-in accordion) */}
-      {selectedLanguage && (
-        <GoogleSheetsBulkImport
-          contentType="letters"
-          onImportComplete={() => fetchLetters(selectedLanguage)}
-          defaultLanguageId={selectedLanguage}
-          defaultWorksheetTitle="yo_letters"
-          expectedColumns={[
-            { name: "source_row_key", required: true, description: "Stable spreadsheet row key", example: "letter_yor_001" },
-            { name: "glyph", required: true, description: "Letter or digraph", example: "Ẹ" },
-            { name: "display_name", required: true, description: "Display name", example: "Ẹ" },
-            { name: "is_digraph", required: false, description: "TRUE for multi-character letters", example: "FALSE" },
-            { name: "order_index", required: true, description: "Sort order", example: "7" },
-            { name: "review_status", required: false, description: "Editorial review status", example: "approved" },
-          ]}
-        />
-      )}
 
       <StickyBulkActionBar
         selectedCount={selectedIds.length}

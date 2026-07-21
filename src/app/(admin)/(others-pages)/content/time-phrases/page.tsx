@@ -1244,6 +1244,27 @@ export default function TimePhrasesPage() {
         <ContentStatsCard label="Aligned" value={stats.aligned} icon={FiGitMerge} iconBgClass="bg-purple-100 dark:bg-purple-900/20" iconTextClass="text-purple-600 dark:text-purple-400" />
       </ContentStatsGrid>
 
+      {/* Bulk Import from Google Sheets */}
+      {selectedLanguage && (
+        <GoogleSheetsBulkImport
+          contentType="phrases"
+          onImportComplete={() => fetchTimePhrases()}
+          defaultLanguageId={selectedLanguage}
+          defaultWorksheetTitle="yo_time"
+          expectedColumns={[
+            { name: 'source_row_key', required: true, description: 'Stable spreadsheet row key', example: 'time_yor_0001' },
+            { name: 'time_24h', required: false, description: '24-hour format (metadata)', example: '00:00' },
+            { name: 'time_12h', required: false, description: '12-hour format (metadata)', example: '12:00 AM' },
+            { name: 'phrase', required: true, description: 'Yoruba time phrase', example: 'Aago mejila òru' },
+            { name: 'translation', required: true, description: 'English time', example: '12:00 AM' },
+            { name: 'category', required: false, description: 'Category (should be "time")', example: 'time' },
+            { name: 'difficulty_level', required: false, description: 'Difficulty 1-5', example: '2' },
+            { name: 'is_published', required: false, description: 'Published status', example: 'false' },
+            { name: 'review_status', required: false, description: 'Editorial review status', example: 'approved' },
+          ]}
+        />
+      )}
+
       {selectedLanguage && (
         <ContentFiltersCard
           activeFilterCount={activeFilters.length}
@@ -1453,27 +1474,6 @@ export default function TimePhrasesPage() {
 
           <ActiveFilterChips filters={activeFilters} />
         </ContentFiltersCard>
-      )}
-
-      {/* Bulk Import from Google Sheets */}
-      {selectedLanguage && (
-        <GoogleSheetsBulkImport
-          contentType="phrases"
-          onImportComplete={() => fetchTimePhrases()}
-          defaultLanguageId={selectedLanguage}
-          defaultWorksheetTitle="yo_time"
-          expectedColumns={[
-            { name: 'source_row_key', required: true, description: 'Stable spreadsheet row key', example: 'time_yor_0001' },
-            { name: 'time_24h', required: false, description: '24-hour format (metadata)', example: '00:00' },
-            { name: 'time_12h', required: false, description: '12-hour format (metadata)', example: '12:00 AM' },
-            { name: 'phrase', required: true, description: 'Yoruba time phrase', example: 'Aago mejila òru' },
-            { name: 'translation', required: true, description: 'English time', example: '12:00 AM' },
-            { name: 'category', required: false, description: 'Category (should be "time")', example: 'time' },
-            { name: 'difficulty_level', required: false, description: 'Difficulty 1-5', example: '2' },
-            { name: 'is_published', required: false, description: 'Published status', example: 'false' },
-            { name: 'review_status', required: false, description: 'Editorial review status', example: 'approved' },
-          ]}
-        />
       )}
 
       {/* Time Phrase Jobs Accordion */}
