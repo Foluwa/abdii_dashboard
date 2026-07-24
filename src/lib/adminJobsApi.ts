@@ -66,6 +66,11 @@ export async function createTimePhraseJob(payload: {
   return res.data;
 }
 
+export async function createAudioReconciliationJob() {
+  const res = await apiClient.post<AdminJob>('/api/v1/admin/content/audio-reconciliation/jobs');
+  return res.data;
+}
+
 export async function listAdminJobs(params?: {
   status?: string;
   type?: string;
