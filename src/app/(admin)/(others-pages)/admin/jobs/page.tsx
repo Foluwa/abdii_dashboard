@@ -24,6 +24,7 @@ const TYPE_OPTIONS = [
   "missing_sense_generation",
   "proverb_cleanup",
   "time_phrase_processing",
+  "content_audio_reconciliation",
 ];
 
 function formatDate(value?: string | null) {
