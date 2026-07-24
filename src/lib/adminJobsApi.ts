@@ -71,6 +71,58 @@ export async function createAudioReconciliationJob() {
   return res.data;
 }
 
+export type ContentLocalizationLocale = 'fr' | 'pt-BR';
+
+export type ContentLocalizationRow = {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  field_name: string;
+  locale: string;
+  value: string;
+  status: 'machine_draft' | 'reviewed' | 'published' | 'stale';
+  created_at?: string | null;
+};
+
+export type ListContentLocalizationsResponse = {
+  items: ContentLocalizationRow[];
+  total: number;
+};
+
+export async function createContentLocalizationJob(locale: ContentLocalizationLocale) {
+  const res = await apiClient.post<AdminJob>('/api/v1/admin/content/localizations/jobs', { locale });
+  return res.data;
+}
+
+export async function listContentLocalizations(params: {
+  locale?: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  const searchParams = new URLSearchParams();
+  if (params.locale) searchParams.set('locale', params.locale);
+  if (params.status) searchParams.set('status', params.status);
+  if (params.limit) searchParams.set('limit', String(params.limit));
+  if (params.offset) searchParams.set('offset', String(params.offset));
+  const suffix = searchParams.toString() ? `?${searchParams.toString()}` : '';
+  const res = await apiClient.get<ListContentLocalizationsResponse>(
+    `/api/v1/admin/content/localizations${suffix}`
+  );
+  return res.data;
+}
+
+export async function publishContentLocalizations(
+  locale: ContentLocalizationLocale,
+  ids?: string[]
+) {
+  const res = await apiClient.post<{ published_count: number }>(
+    '/api/v1/admin/content/localizations/publish',
+    { locale, ids }
+  );
+  return res.data;
+}
+
 export async function listAdminJobs(params?: {
   status?: string;
   type?: string;
