@@ -71,6 +71,10 @@ export const mainNavigationItems: AdminNavItem[] = [
         path: "/content/audio-reconciliation",
       },
       {
+        name: "Localizations",
+        path: "/content/localizations",
+      },
+      {
         name: "Patterns",
         path: "/content/patterns",
       },
